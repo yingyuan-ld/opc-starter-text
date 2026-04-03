@@ -203,6 +203,54 @@ CREATE TRIGGER profiles_sync_organization
   FOR EACH ROW EXECUTE FUNCTION sync_profile_organization();
 
 -- -----------------------------------------------------
+-- 2.1b Personnel records（人员管理主数据，按 owner 隔离）
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.personnel_records (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name TEXT NOT NULL,
+  gender TEXT NOT NULL DEFAULT 'unknown'
+    CHECK (gender IN ('unknown', 'male', 'female', 'prefer_not_say')),
+  phone TEXT,
+  address TEXT,
+  remark TEXT,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+
+-- 已存在旧表（无 is_active）时补齐列
+ALTER TABLE public.personnel_records
+  ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true;
+
+CREATE INDEX IF NOT EXISTS idx_personnel_records_owner ON public.personnel_records(owner_id);
+CREATE INDEX IF NOT EXISTS idx_personnel_records_full_name ON public.personnel_records(full_name);
+
+ALTER TABLE public.personnel_records ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS personnel_records_select ON public.personnel_records;
+DROP POLICY IF EXISTS personnel_records_insert ON public.personnel_records;
+DROP POLICY IF EXISTS personnel_records_update ON public.personnel_records;
+DROP POLICY IF EXISTS personnel_records_delete ON public.personnel_records;
+
+CREATE POLICY personnel_records_select ON public.personnel_records
+  FOR SELECT USING (auth.uid() = owner_id);
+
+CREATE POLICY personnel_records_insert ON public.personnel_records
+  FOR INSERT WITH CHECK (auth.uid() = owner_id);
+
+CREATE POLICY personnel_records_update ON public.personnel_records
+  FOR UPDATE USING (auth.uid() = owner_id);
+
+CREATE POLICY personnel_records_delete ON public.personnel_records
+  FOR DELETE USING (auth.uid() = owner_id);
+
+DROP TRIGGER IF EXISTS personnel_records_updated_at ON public.personnel_records;
+CREATE TRIGGER personnel_records_updated_at
+  BEFORE UPDATE ON public.personnel_records
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- -----------------------------------------------------
 -- 2.2 Organizations
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.organizations (
@@ -531,4 +579,12 @@ SET search_path = public, extensions;
 -- =====================================================
 INSERT INTO public._schema_migrations (seq, name, description, story)
 VALUES ('00001', 'baseline', 'OPC-Starter v1.0 初始 schema：profiles, organizations, organization_members, agent_threads/messages/actions, _schema_migrations', NULL)
+ON CONFLICT (seq) DO NOTHING;
+
+INSERT INTO public._schema_migrations (seq, name, description, story)
+VALUES ('00002', 'personnel_records', '人员管理：personnel_records 表及 RLS（owner_id 隔离）', NULL)
+ON CONFLICT (seq) DO NOTHING;
+
+INSERT INTO public._schema_migrations (seq, name, description, story)
+VALUES ('00003', 'personnel_records_is_active', '人员管理：personnel_records.is_active 启用/禁用', NULL)
 ON CONFLICT (seq) DO NOTHING;

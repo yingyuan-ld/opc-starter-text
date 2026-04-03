@@ -8,19 +8,28 @@ import { Link } from 'react-router-dom'
 import {
   Users,
   User,
-  Settings,
   Cloud,
+  ContactRound,
   Bot,
   Sparkles,
   ArrowRight,
   CheckCircle2,
   Circle,
+  type LucideIcon,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useProfileStore } from '@/stores/useProfileStore'
 import { dataService } from '@/services/data/DataService'
+import { getDefaultPersonalEntries, type PersonalEntryIconId } from '@/config/personalEntryDefaults'
+
+const PERSONAL_ENTRY_ICONS: Record<PersonalEntryIconId, LucideIcon> = {
+  users: Users,
+  user: User,
+  cloud: Cloud,
+  contact: ContactRound,
+}
 
 function DashboardPage() {
   const { user } = useAuthStore()
@@ -35,36 +44,21 @@ function DashboardPage() {
 
   const syncStats = dataService.getSyncStats()
 
-  const quickActions = [
-    {
-      title: '组织管理',
-      description: '管理团队成员和组织架构',
-      icon: Users,
-      href: '/persons',
-      color: 'bg-blue-500/10 text-blue-500',
-    },
-    {
-      title: '个人中心',
-      description: '更新个人信息和头像',
-      icon: User,
-      href: '/profile',
-      color: 'bg-green-500/10 text-green-500',
-    },
-    {
-      title: '云存储设置',
-      description: '管理存储和同步设置',
-      icon: Cloud,
-      href: '/settings/cloud-storage',
-      color: 'bg-purple-500/10 text-purple-500',
-    },
-    {
-      title: '系统设置',
-      description: '配置应用偏好',
-      icon: Settings,
-      href: '/settings',
-      color: 'bg-orange-500/10 text-orange-500',
-    },
-  ]
+  const personalEntries = getDefaultPersonalEntries().map((entry, index) => {
+    const colorClasses = [
+      'bg-blue-500/10 text-blue-500',
+      'bg-teal-500/10 text-teal-600',
+      'bg-green-500/10 text-green-500',
+      'bg-purple-500/10 text-purple-500',
+      'bg-orange-500/10 text-orange-500',
+    ] as const
+    return {
+      ...entry,
+      href: entry.path,
+      Icon: PERSONAL_ENTRY_ICONS[entry.icon],
+      color: colorClasses[index % colorClasses.length],
+    }
+  })
 
   const features = [
     { name: 'Supabase Auth 认证', done: true },
@@ -97,24 +91,29 @@ function DashboardPage() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Quick Actions */}
-        <section className="mb-12">
-          <h2 className="text-2xl font-semibold text-foreground mb-6">快速入口</h2>
+        {/* 个人常用入口（默认推荐，条数 ≤8） */}
+        <section className="mb-12" aria-labelledby="personal-entry-heading">
+          <h2 id="personal-entry-heading" className="text-2xl font-semibold text-foreground mb-2">
+            个人常用入口
+          </h2>
+          <p className="text-sm text-muted-foreground mb-6">
+            根据常用操作为你推荐的快捷入口，可直接跳转到对应页面。
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {quickActions.map((action) => (
-              <Link key={action.href} to={action.href}>
+            {personalEntries.map((item) => (
+              <Link key={item.href} to={item.href}>
                 <Card className="p-6 hover:shadow-lg transition-shadow cursor-pointer group">
                   <div
-                    className={`w-12 h-12 rounded-lg ${action.color} flex items-center justify-center mb-4`}
+                    className={`w-12 h-12 rounded-lg ${item.color} flex items-center justify-center mb-4`}
                   >
-                    <action.icon className="w-6 h-6" />
+                    <item.Icon className="w-6 h-6" aria-hidden />
                   </div>
                   <h3 className="font-semibold text-foreground mb-1 group-hover:text-primary transition-colors">
-                    {action.title}
+                    {item.label}
                   </h3>
-                  <p className="text-sm text-muted-foreground">{action.description}</p>
+                  <p className="text-sm text-muted-foreground">{item.description}</p>
                   <div className="mt-4 flex items-center text-sm text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-                    进入 <ArrowRight className="w-4 h-4 ml-1" />
+                    进入 <ArrowRight className="w-4 h-4 ml-1" aria-hidden />
                   </div>
                 </Card>
               </Link>

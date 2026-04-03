@@ -31,6 +31,10 @@ const REST_URL_PATTERNS = {
     'http://localhost:5173/supabase-proxy/rest/v1/ai_fusion_tasks',
     'https://*.supabase.co/rest/v1/ai_fusion_tasks',
   ],
+  personnel_records: [
+    'http://localhost:5173/supabase-proxy/rest/v1/personnel_records',
+    'https://*.supabase.co/rest/v1/personnel_records',
+  ],
 }
 
 // Mock 数据
@@ -98,6 +102,21 @@ const MOCK_ORGANIZATIONS: Record<string, unknown>[] = []
 
 const MOCK_AI_FUSION_TASKS: Record<string, unknown>[] = []
 
+const MOCK_PERSONNEL_RECORDS: Record<string, unknown>[] = [
+  {
+    id: 'mock-personnel-1',
+    owner_id: 'test-user-id-12345',
+    full_name: '演示人员',
+    gender: 'male',
+    phone: '13800138000',
+    address: '上海市示例路 1 号',
+    remark: null,
+    is_active: true,
+    created_at: '2024-01-01T00:00:00.000Z',
+    updated_at: '2024-01-01T00:00:00.000Z',
+  },
+]
+
 // 数据存储
 const dataStore: Record<string, Record<string, unknown>[]> = {
   photos: [...MOCK_PHOTOS],
@@ -106,6 +125,7 @@ const dataStore: Record<string, Record<string, unknown>[]> = {
   profiles: [...MOCK_PROFILES],
   organizations: [...MOCK_ORGANIZATIONS],
   ai_fusion_tasks: [...MOCK_AI_FUSION_TASKS],
+  personnel_records: [...MOCK_PERSONNEL_RECORDS],
 }
 
 // 通用 GET 处理器 - 支持 select, order, eq 等查询参数
@@ -139,17 +159,28 @@ const handleGet =
       })
     }
 
+    let filtered = result
+    url.searchParams.forEach((value, key) => {
+      if (typeof value === 'string' && value.startsWith('eq.')) {
+        const expected = value.slice(3)
+        filtered = filtered.filter(
+          (row) => String((row as Record<string, unknown>)[key] ?? '') === expected
+        )
+      }
+    })
+
     // 处理 count 请求
     const prefer = request.headers.get('Prefer')
     if (prefer?.includes('count=exact')) {
-      return HttpResponse.json(result, {
+      const len = filtered.length
+      return HttpResponse.json(filtered, {
         headers: {
-          'Content-Range': `0-${result.length - 1}/${result.length}`,
+          'Content-Range': len > 0 ? `0-${len - 1}/${len}` : '0-0/0',
         },
       })
     }
 
-    return HttpResponse.json(result)
+    return HttpResponse.json(filtered)
   }
 
 // 通用 POST 处理器 - 插入数据
@@ -159,11 +190,14 @@ const handlePost =
     await delay(getRandomDelay(100, 300))
 
     const body = (await request.json()) as Record<string, unknown>
-    const newRecord = {
+    const newRecord: Record<string, unknown> = {
       id: `mock-${tableName}-${Date.now()}`,
       ...body,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+    }
+    if (tableName === 'personnel_records' && newRecord.is_active === undefined) {
+      newRecord.is_active = true
     }
 
     dataStore[tableName] = dataStore[tableName] || []
@@ -200,13 +234,20 @@ const handlePatch =
     const data = dataStore[tableName] || []
     const index = data.findIndex((item) => item.id === eqParams['id'])
 
+    let updatedRow: Record<string, unknown> | null = null
     if (index !== -1) {
       data[index] = {
         ...data[index],
         ...body,
         updated_at: new Date().toISOString(),
       }
+      updatedRow = data[index] as Record<string, unknown>
       console.log(`[MSW REST] PATCH /${tableName}`, data[index])
+    }
+
+    const prefer = request.headers.get('Prefer')
+    if (prefer?.includes('return=representation') && updatedRow) {
+      return HttpResponse.json([updatedRow], { status: 200 })
     }
 
     return HttpResponse.json(null, { status: 204 })
@@ -288,5 +329,13 @@ export const supabaseRestHandlers = [
     http.post(pattern, handlePost('ai_fusion_tasks')),
     http.patch(pattern, handlePatch('ai_fusion_tasks')),
     http.delete(pattern, handleDelete('ai_fusion_tasks')),
+  ]),
+
+  // Personnel records（人员管理）
+  ...REST_URL_PATTERNS.personnel_records.flatMap((pattern) => [
+    http.get(pattern, handleGet('personnel_records')),
+    http.post(pattern, handlePost('personnel_records')),
+    http.patch(pattern, handlePatch('personnel_records')),
+    http.delete(pattern, handleDelete('personnel_records')),
   ]),
 ]

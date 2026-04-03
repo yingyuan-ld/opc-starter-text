@@ -43,6 +43,7 @@ describe('Sidebar', () => {
     // OPC-Starter 菜单项
     expect(screen.getByText('首页')).toBeInTheDocument()
     expect(screen.getByText('组织管理')).toBeInTheDocument()
+    expect(screen.getByText('人员管理')).toBeInTheDocument()
     expect(screen.getByText('个人中心')).toBeInTheDocument()
     expect(screen.getByText('设置')).toBeInTheDocument()
   })
@@ -139,6 +140,9 @@ describe('Sidebar', () => {
 
     const organizationLink = screen.getAllByText('组织管理')[0].closest('a')
     expect(organizationLink).toHaveAttribute('href', '/persons')
+
+    const personnelLink = screen.getAllByText('人员管理')[0].closest('a')
+    expect(personnelLink).toHaveAttribute('href', '/personnel')
 
     const profileLink = screen.getAllByText('个人中心')[0].closest('a')
     expect(profileLink).toHaveAttribute('href', '/profile')

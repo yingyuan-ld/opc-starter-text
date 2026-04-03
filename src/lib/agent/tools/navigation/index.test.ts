@@ -53,6 +53,18 @@ describe('navigationTool', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/persons')
   })
 
+  it('should navigate to personnel', async () => {
+    const mockNavigate = vi.fn()
+    setNavigateCallback(mockNavigate)
+
+    const result = await navigationTool.execute({
+      page: 'personnel',
+    })
+
+    expect(result.success).toBe(true)
+    expect(mockNavigate).toHaveBeenCalledWith('/personnel')
+  })
+
   it('should navigate to profile', async () => {
     const mockNavigate = vi.fn()
     setNavigateCallback(mockNavigate)

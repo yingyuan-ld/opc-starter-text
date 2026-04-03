@@ -15,13 +15,15 @@ export function setNavigateCallback(cb: NavigateCallback | null): void {
 }
 
 const navigationParamsSchema = z.object({
-  page: z.enum(['home', 'persons', 'profile', 'settings', 'storage']).describe('目标页面'),
+  page: z
+    .enum(['home', 'persons', 'personnel', 'profile', 'settings', 'storage'])
+    .describe('目标页面'),
 })
 
 export const navigationTool = defineTool({
   name: 'navigateToPage',
   description:
-    '导航到指定页面。可选页面: home(首页), persons(组织管理), profile(个人中心), settings(设置), storage(云存储设置)',
+    '导航到指定页面。可选页面: home(首页), persons(组织管理), personnel(人员管理), profile(个人中心), settings(设置), storage(云存储设置)',
   category: 'navigation',
   parameters: navigationParamsSchema,
 
@@ -37,6 +39,7 @@ export const navigationTool = defineTool({
       const pageMap: Record<string, { path: string; name: string }> = {
         home: { path: '/', name: '首页' },
         persons: { path: '/persons', name: '组织管理' },
+        personnel: { path: '/personnel', name: '人员管理' },
         profile: { path: '/profile', name: '个人中心' },
         settings: { path: '/settings', name: '设置' },
         storage: { path: '/settings/cloud-storage', name: '云存储设置' },

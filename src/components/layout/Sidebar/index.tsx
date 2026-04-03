@@ -3,7 +3,7 @@
  * @description 提供主要页面导航链接，支持折叠/展开，集成 Agent 按钮入口
  */
 import { Link, useLocation } from 'react-router-dom'
-import { Home, Users, User, Settings, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Home, Users, User, Settings, X, ChevronLeft, ChevronRight, ContactRound } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentButton } from '@/components/agent/AgentButton'
 
@@ -13,6 +13,7 @@ import { AgentButton } from '@/components/agent/AgentButton'
 const menuItems = [
   { path: '/', label: '首页', icon: Home },
   { path: '/persons', label: '组织管理', icon: Users },
+  { path: '/personnel', label: '人员管理', icon: ContactRound },
   { path: '/profile', label: '个人中心', icon: User },
   { path: '/settings', label: '设置', icon: Settings },
 ]
@@ -101,7 +102,10 @@ export function Sidebar({
           <ul className="space-y-1 md:space-y-2">
             {menuItems.map((item) => {
               const Icon = item.icon
-              const isActive = location.pathname === item.path
+              const isActive =
+                item.path === '/'
+                  ? location.pathname === '/'
+                  : location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)
 
               return (
                 <li key={item.path}>

@@ -13,6 +13,7 @@ const PersonsPage = lazy(() => import('@/pages/PersonsPage'))
 const ProfilePage = lazy(() => import('@/pages/ProfilePage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 const CloudStorageSettingsPage = lazy(() => import('@/pages/CloudStorageSettingsPage'))
+const PersonnelManagementPage = lazy(() => import('@/pages/PersonnelManagementPage'))
 
 // 认证页面
 const LoginPage = lazy(() => import('@/auth/pages/LoginPage'))
@@ -47,6 +48,10 @@ export const router = createBrowserRouter([
       {
         path: 'persons',
         element: <PersonsPage />,
+      },
+      {
+        path: 'personnel',
+        element: <PersonnelManagementPage />,
       },
       {
         path: 'profile',
