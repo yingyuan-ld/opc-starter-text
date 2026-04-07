@@ -35,42 +35,83 @@ function OrgTreeNodeComponent({
   const isSelected = selectedId === node.id
   const hasChildren = node.children && node.children.length > 0
 
-  const handleToggleExpand = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (hasChildren) {
-      onToggleExpand(node.id)
-    }
-  }
-
   const handleSelect = () => {
     onSelect(node)
   }
 
+  const treeItemDomId = `org-treeitem-${node.id}`
+
+  const toggleExpandMouse = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (hasChildren) onToggleExpand(node.id)
+  }
+
+  const handleRowKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      handleSelect()
+      return
+    }
+    if (hasChildren && e.key === 'ArrowRight' && !isExpanded) {
+      e.preventDefault()
+      onToggleExpand(node.id)
+      return
+    }
+    if (hasChildren && e.key === 'ArrowLeft' && isExpanded) {
+      e.preventDefault()
+      onToggleExpand(node.id)
+    }
+  }
+
+  const expandLabel = isExpanded
+    ? `折叠「${node.display_name}」下的子组织`
+    : `展开「${node.display_name}」下的子组织`
+
   return (
     <div>
       <div
+        id={treeItemDomId}
+        role="treeitem"
+        aria-expanded={hasChildren ? isExpanded : undefined}
+        tabIndex={0}
         className={cn(
-          'flex items-center gap-1 py-2 px-2 cursor-pointer rounded-md hover:bg-accent transition-colors',
+          'flex items-center gap-1 py-2 px-2 cursor-pointer rounded-md hover:bg-accent transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',
           isSelected && 'bg-accent font-medium',
           'group'
         )}
         style={{ paddingLeft: `${level * 16 + 8}px` }}
         onClick={handleSelect}
+        onKeyDown={handleRowKeyDown}
       >
-        <div
-          className="flex-shrink-0 w-4 h-4 flex items-center justify-center"
-          onClick={handleToggleExpand}
-        >
-          {hasChildren ? (
-            isExpanded ? (
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+        {hasChildren ? (
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-expanded={isExpanded}
+            aria-label={expandLabel}
+            className={cn(
+              'flex-shrink-0 flex h-8 w-8 items-center justify-center rounded-md',
+              'text-muted-foreground hover:bg-secondary hover:text-foreground',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+            )}
+            onClick={toggleExpandMouse}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                e.stopPropagation()
+                onToggleExpand(node.id)
+              }
+            }}
+          >
+            {isExpanded ? (
+              <ChevronDown className="h-4 w-4" aria-hidden />
             ) : (
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            )
-          ) : (
-            <div className="w-4 h-4" />
-          )}
-        </div>
+              <ChevronRight className="h-4 w-4" aria-hidden />
+            )}
+          </button>
+        ) : (
+          <span className="inline-flex h-8 w-8 shrink-0" aria-hidden />
+        )}
 
         <div className="flex-shrink-0">
           {hasChildren ? (
@@ -95,7 +136,7 @@ function OrgTreeNodeComponent({
       </div>
 
       {hasChildren && isExpanded && (
-        <div>
+        <div role="group" aria-labelledby={treeItemDomId}>
           {node.children!.map((child) => (
             <OrgTreeNodeComponent
               key={child.id}
@@ -146,7 +187,7 @@ export function OrgTree({ tree, selectedId, onSelect, className }: OrgTreeProps)
   }
 
   return (
-    <div className={cn('py-2', className)}>
+    <div className={cn('py-2', className)} role="tree" aria-label="组织架构">
       {tree.map((node) => (
         <OrgTreeNodeComponent
           key={node.id}

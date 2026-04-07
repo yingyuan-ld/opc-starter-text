@@ -80,7 +80,8 @@ function PersonnelManagementPage() {
     const pq = searchPhone.trim().toLowerCase().replace(/\s/g, '')
 
     return items.filter((p) => {
-      if (nq && !p.fullName.toLowerCase().includes(nq)) return false
+      const nameNorm = p.fullName.trim().toLowerCase()
+      if (nq && !nameNorm.includes(nq)) return false
       if (searchGender !== GENDER_FILTER_ALL && p.gender !== searchGender) return false
       if (pq) {
         const phoneNorm = p.phone.replace(/\s/g, '').toLowerCase()
@@ -430,6 +431,7 @@ function PersonnelManagementPage() {
               <Input
                 id="pf-phone"
                 type="tel"
+                placeholder="11 位手机号，可含 +86 或空格；可留空"
                 value={formPhone}
                 onChange={(e) => setFormPhone(e.target.value)}
                 autoComplete="tel"
@@ -510,6 +512,7 @@ function PersonnelManagementPage() {
               <Input
                 id="pf-edit-phone"
                 type="tel"
+                placeholder="11 位手机号，可含 +86 或空格；可留空"
                 value={formPhone}
                 onChange={(e) => setFormPhone(e.target.value)}
                 autoComplete="tel"

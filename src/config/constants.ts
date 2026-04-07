@@ -3,6 +3,11 @@
  */
 
 /**
+ * 系统组织根节点 UUID（与 `setup.sql` 种子一致，不可删除）
+ */
+export const SYSTEM_ORGANIZATION_ROOT_ID = 'c0000000-0000-4000-8000-000000000001'
+
+/**
  * API基础URL
  */
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'

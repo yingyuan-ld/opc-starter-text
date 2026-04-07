@@ -5,6 +5,7 @@
  * 所有变更操作完成后自动失效相关缓存。
  */
 
+import { SYSTEM_ORGANIZATION_ROOT_ID } from '@/config/constants'
 import { supabase } from '@/lib/supabase/client'
 import { memoryCache } from '@/services/cache/memoryCache'
 import type {
@@ -76,6 +77,9 @@ export class OrganizationMutations {
 
   async deleteOrganization(id: string, _userId: string): Promise<void> {
     void _userId
+    if (id === SYSTEM_ORGANIZATION_ROOT_ID) {
+      throw new Error('系统根组织不可删除')
+    }
     const { error } = await supabase.rpc('admin_delete_organization', { p_org_id: id })
 
     if (error) throw new Error('Failed to delete organization: ' + error.message)

@@ -17,14 +17,49 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import type { Organization, CreateOrganizationInput } from '@/lib/supabase/organizationTypes'
 
+/** root：无父级；child：在 parentOrg 下；sibling：与 referenceOrg 同级（父级为 parentOrg，根级时 parentOrg 为 null） */
+export type CreateOrgIntent = 'root' | 'child' | 'sibling'
+
 interface CreateOrgDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   parentOrg: Organization | null
+  /** 创建同级时的参考节点（用于文案） */
+  referenceOrg?: Organization | null
+  intent?: CreateOrgIntent
   onSubmit: (input: CreateOrganizationInput) => Promise<void>
 }
 
-export function CreateOrgDialog({ open, onOpenChange, parentOrg, onSubmit }: CreateOrgDialogProps) {
+function createDescription(
+  intent: CreateOrgIntent,
+  parentOrg: Organization | null,
+  referenceOrg: Organization | null
+): string {
+  if (intent === 'root') return '在根层级创建新组织（与系统根同级）'
+  if (intent === 'child' && parentOrg) return `在「${parentOrg.display_name}」下创建子组织`
+  if (intent === 'sibling' && referenceOrg) {
+    if (parentOrg) {
+      return `创建与「${referenceOrg.display_name}」同级的组织（父级：${parentOrg.display_name}）`
+    }
+    return `创建与「${referenceOrg.display_name}」同级的组织（根层级）`
+  }
+  return '创建新组织'
+}
+
+function createTitle(intent: CreateOrgIntent): string {
+  if (intent === 'root') return '创建根组织'
+  if (intent === 'child') return '创建子组织'
+  return '创建同级组织'
+}
+
+export function CreateOrgDialog({
+  open,
+  onOpenChange,
+  parentOrg,
+  referenceOrg = null,
+  intent = 'root',
+  onSubmit,
+}: CreateOrgDialogProps) {
   const [name, setName] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [description, setDescription] = useState('')
@@ -36,10 +71,17 @@ export function CreateOrgDialog({ open, onOpenChange, parentOrg, onSubmit }: Cre
 
     setIsSubmitting(true)
     try {
+      const parentId =
+        intent === 'sibling'
+          ? (referenceOrg?.parent_id ?? null)
+          : intent === 'child'
+            ? (parentOrg?.id ?? null)
+            : null
+
       await onSubmit({
         name: name.trim(),
         display_name: displayName.trim(),
-        parent_id: parentOrg?.id || null,
+        parent_id: parentId,
         description: description.trim() || null,
       })
       setName('')
@@ -58,9 +100,9 @@ export function CreateOrgDialog({ open, onOpenChange, parentOrg, onSubmit }: Cre
       <DialogContent>
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>创建组织</DialogTitle>
+            <DialogTitle>{createTitle(intent)}</DialogTitle>
             <DialogDescription>
-              {parentOrg ? `在 "${parentOrg.display_name}" 下创建子组织` : '创建根组织'}
+              {createDescription(intent, parentOrg, referenceOrg)}
             </DialogDescription>
           </DialogHeader>
 

@@ -265,6 +265,8 @@ CREATE TABLE IF NOT EXISTS public.organizations (
   level INTEGER NOT NULL DEFAULT 0,
   sort_order INTEGER DEFAULT 0,
   
+  is_system_root BOOLEAN NOT NULL DEFAULT false,
+  
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
   created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -273,13 +275,54 @@ CREATE TABLE IF NOT EXISTS public.organizations (
   CONSTRAINT unique_org_name UNIQUE (name)
 );
 
+ALTER TABLE public.organizations
+  ADD COLUMN IF NOT EXISTS is_system_root BOOLEAN NOT NULL DEFAULT false;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_organizations_one_system_root
+  ON public.organizations ((1))
+  WHERE is_system_root IS TRUE;
+
 CREATE INDEX IF NOT EXISTS idx_organizations_path ON public.organizations USING gist(path);
 CREATE INDEX IF NOT EXISTS idx_organizations_parent ON public.organizations(parent_id) WHERE parent_id IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION organizations_prevent_system_root_delete()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF OLD.is_system_root IS TRUE THEN
+    RAISE EXCEPTION '系统根组织不可删除';
+  END IF;
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public;
+
+CREATE OR REPLACE FUNCTION organizations_prevent_system_root_demotion()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF OLD.is_system_root IS TRUE AND NEW.is_system_root IS FALSE THEN
+    RAISE EXCEPTION '不可取消系统根组织标记';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public;
 
 DROP TRIGGER IF EXISTS organizations_updated_at ON public.organizations;
 CREATE TRIGGER organizations_updated_at
   BEFORE UPDATE ON public.organizations
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS organizations_system_root_delete ON public.organizations;
+CREATE TRIGGER organizations_system_root_delete
+  BEFORE DELETE ON public.organizations
+  FOR EACH ROW EXECUTE FUNCTION organizations_prevent_system_root_delete();
+
+DROP TRIGGER IF EXISTS organizations_system_root_demotion ON public.organizations;
+CREATE TRIGGER organizations_system_root_demotion
+  BEFORE UPDATE ON public.organizations
+  FOR EACH ROW EXECUTE FUNCTION organizations_prevent_system_root_demotion();
 
 -- -----------------------------------------------------
 -- 2.3 Organization Members
@@ -557,6 +600,78 @@ $$ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, extensions;
 
+CREATE OR REPLACE FUNCTION admin_delete_organization(p_org_id UUID)
+RETURNS void AS $$
+DECLARE
+  v_user_role TEXT;
+  v_is_root BOOLEAN;
+  v_cnt INTEGER;
+BEGIN
+  SELECT role INTO v_user_role
+  FROM public.profiles
+  WHERE id = auth.uid();
+
+  IF v_user_role IS NULL OR v_user_role != 'admin' THEN
+    RAISE EXCEPTION 'Permission denied: Only admins can delete organizations';
+  END IF;
+
+  SELECT COALESCE(is_system_root, false) INTO v_is_root
+  FROM public.organizations
+  WHERE id = p_org_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Organization not found';
+  END IF;
+
+  IF v_is_root THEN
+    RAISE EXCEPTION '系统根组织不可删除';
+  END IF;
+
+  SELECT COUNT(*)::INTEGER INTO v_cnt
+  FROM public.organizations
+  WHERE parent_id = p_org_id;
+
+  IF v_cnt > 0 THEN
+    RAISE EXCEPTION 'Cannot delete organization with child organizations';
+  END IF;
+
+  SELECT COUNT(*)::INTEGER INTO v_cnt
+  FROM public.organization_members
+  WHERE organization_id = p_org_id;
+
+  IF v_cnt > 0 THEN
+    RAISE EXCEPTION 'Cannot delete organization with members';
+  END IF;
+
+  SELECT COUNT(*)::INTEGER INTO v_cnt
+  FROM public.profiles
+  WHERE organization_id = p_org_id;
+
+  IF v_cnt > 0 THEN
+    RAISE EXCEPTION 'Cannot delete organization: profiles still reference this organization';
+  END IF;
+
+  DELETE FROM public.organizations WHERE id = p_org_id;
+END;
+$$ LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions;
+
+-- 系统主根（与前端 SYSTEM_ORGANIZATION_ROOT_ID 一致，不可删除）
+INSERT INTO public.organizations (
+  id, name, display_name, description, parent_id, path, level, is_system_root
+) VALUES (
+  'c0000000-0000-4000-8000-000000000001'::uuid,
+  'opc_system_root',
+  '组织根（系统）',
+  '不可删除的系统主根。',
+  NULL,
+  'opc_system_root'::extensions.ltree,
+  0,
+  true
+)
+ON CONFLICT (id) DO NOTHING;
+
 -- =====================================================
 -- 7. Storage Buckets (Run in Supabase Dashboard)
 -- =====================================================
@@ -587,4 +702,13 @@ ON CONFLICT (seq) DO NOTHING;
 
 INSERT INTO public._schema_migrations (seq, name, description, story)
 VALUES ('00003', 'personnel_records_is_active', '人员管理：personnel_records.is_active 启用/禁用', NULL)
+ON CONFLICT (seq) DO NOTHING;
+
+INSERT INTO public._schema_migrations (seq, name, description, story)
+VALUES (
+  '00004',
+  'organizations_system_root',
+  '组织：is_system_root 主根、种子行、admin_delete_organization、删除/降级触发器',
+  NULL
+)
 ON CONFLICT (seq) DO NOTHING;

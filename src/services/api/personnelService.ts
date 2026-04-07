@@ -4,6 +4,7 @@
 
 import { supabase } from '@/lib/supabase/client'
 import { authService } from '@/lib/supabase/auth'
+import { normalizePhoneForStorage, validateOptionalMainlandMobile } from '@/utils/phoneValidation'
 import type {
   PersonnelCreateInput,
   PersonnelGender,
@@ -67,13 +68,17 @@ export async function createPersonnel(input: PersonnelCreateInput): Promise<Pers
   const name = input.fullName.trim()
   if (!name) throw new Error('请填写姓名')
 
+  const phoneErr = validateOptionalMainlandMobile(input.phone)
+  if (phoneErr) throw new Error(phoneErr)
+  const phoneStored = normalizePhoneForStorage(input.phone)
+
   const { data, error } = await supabase
     .from('personnel_records')
     .insert({
       owner_id: user.id,
       full_name: name,
       gender: input.gender,
-      phone: input.phone.trim() || null,
+      phone: phoneStored || null,
       address: input.address.trim() || null,
       remark: input.remark?.trim() || null,
       is_active: true,
@@ -96,7 +101,11 @@ export async function updatePersonnel(id: string, input: PersonnelUpdateInput): 
     updates.full_name = n
   }
   if (input.gender !== undefined) updates.gender = input.gender
-  if (input.phone !== undefined) updates.phone = input.phone.trim() || null
+  if (input.phone !== undefined) {
+    const pe = validateOptionalMainlandMobile(input.phone)
+    if (pe) throw new Error(pe)
+    updates.phone = normalizePhoneForStorage(input.phone) || null
+  }
   if (input.address !== undefined) updates.address = input.address.trim() || null
   if (input.remark !== undefined) updates.remark = input.remark?.trim() || null
   if (input.isActive !== undefined) updates.is_active = input.isActive

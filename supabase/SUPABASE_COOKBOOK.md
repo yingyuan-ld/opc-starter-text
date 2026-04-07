@@ -19,7 +19,7 @@
 | 表                   | 说明                                                         |
 | -------------------- | ------------------------------------------------------------ |
 | `profiles`           | 用户档案，扩展 auth.users                                    |
-| `organizations`      | 组织架构，支持多层级树形结构                                 |
+| `organizations`      | 组织架构，支持多层级树形结构；含 `is_system_root` 系统主根（不可删除） |
 | `persons`            | 人员数据（历史/相册域；与下表不同）                          |
 | `personnel_records`  | 人员管理主数据（姓名、性别、电话、住址、`is_active` 启用/禁用等），按 `owner_id` 与登录用户隔离 |
 
@@ -59,6 +59,8 @@ SELECT admin_create_organization(
 ```sql
 SELECT admin_delete_organization(p_org_id := '<org_id>');
 ```
+
+约束：无子组织、无 `organization_members`、无 `profiles.organization_id` 指向该组织；**系统主根**（`is_system_root = true`，种子 UUID `c0000000-0000-4000-8000-000000000001`）不可删，与前端 `SYSTEM_ORGANIZATION_ROOT_ID` 一致。直接 `DELETE` 或取消主根标记会触发数据库报错。
 
 ## RLS 策略
 

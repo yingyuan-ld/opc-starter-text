@@ -13,6 +13,8 @@ export interface Organization {
   path: string
   level: number
   description: string | null
+  /** 系统主根，不可删除（见 setup.sql） */
+  is_system_root?: boolean
   created_at: string
   updated_at: string
 }

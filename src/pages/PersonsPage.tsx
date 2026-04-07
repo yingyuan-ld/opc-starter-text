@@ -3,16 +3,20 @@
  * @description 展示组织树、团队成员列表，支持创建组织、添加成员、分配团队等操作
  */
 import { useEffect, useState, useRef } from 'react'
-import { Plus, Settings, Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { OrgTree } from '@/components/organization/OrgTree'
 import { TeamMembersList } from '@/components/organization/TeamMembersList'
-import { CreateOrgDialog } from '@/components/organization/CreateOrgDialog'
+import { CreateOrgDialog, type CreateOrgIntent } from '@/components/organization/CreateOrgDialog'
+import { EditOrganizationDialog } from '@/components/organization/EditOrganizationDialog'
+import { OrganizationNodeToolbar } from '@/components/organization/OrganizationNodeToolbar'
 import { AddMemberDialog } from '@/components/organization/AddMemberDialog'
 import { ChangeRoleDialog } from '@/components/organization/ChangeRoleDialog'
+import { SYSTEM_ORGANIZATION_ROOT_ID } from '@/config/constants'
 import { useOrganization } from '@/hooks/useOrganization'
 import { useAuthStore } from '@/stores/useAuthStore'
-import type { OrganizationTreeNode, Profile } from '@/lib/supabase/organizationTypes'
+import { findOrgNodeById } from '@/lib/organizationTreeUtils'
+import type { Organization, OrganizationTreeNode, Profile } from '@/lib/supabase/organizationTypes'
 
 function PersonsPage() {
   const { user } = useAuthStore()
@@ -29,6 +33,7 @@ function PersonsPage() {
     loadTree,
     selectOrganization,
     createOrganization,
+    updateOrganization,
     deleteOrganization,
     getUserOrgInfo,
     addMember,
@@ -38,6 +43,9 @@ function PersonsPage() {
   } = useOrganization(userId)
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [createIntent, setCreateIntent] = useState<CreateOrgIntent>('root')
+  const [createReferenceOrg, setCreateReferenceOrg] = useState<Organization | null>(null)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [parentOrgForCreate, setParentOrgForCreate] = useState<OrganizationTreeNode | null>(null)
   const [addMemberDialogOpen, setAddMemberDialogOpen] = useState(false)
   const [changeRoleDialogOpen, setChangeRoleDialogOpen] = useState(false)
@@ -55,8 +63,28 @@ function PersonsPage() {
     selectOrganization(node)
   }
 
-  const handleCreateOrg = () => {
-    setParentOrgForCreate(selectedOrg as OrganizationTreeNode | null)
+  const openCreateRoot = () => {
+    setCreateIntent('root')
+    setParentOrgForCreate(null)
+    setCreateReferenceOrg(null)
+    setCreateDialogOpen(true)
+  }
+
+  const openCreateChild = () => {
+    if (!selectedOrg) return
+    setCreateIntent('child')
+    setParentOrgForCreate(selectedOrg as OrganizationTreeNode)
+    setCreateReferenceOrg(null)
+    setCreateDialogOpen(true)
+  }
+
+  const openCreateSibling = () => {
+    if (!selectedOrg) return
+    const pid = selectedOrg.parent_id
+    const parentNode = pid ? findOrgNodeById(tree, pid) : null
+    setCreateIntent('sibling')
+    setParentOrgForCreate(parentNode)
+    setCreateReferenceOrg(selectedOrg)
     setCreateDialogOpen(true)
   }
 
@@ -106,6 +134,8 @@ function PersonsPage() {
 
   const currentUserRole = userOrgInfo?.role || 'member'
   const isAdmin = currentUserRole === 'admin'
+  const isSystemRoot =
+    selectedOrg?.is_system_root === true || selectedOrg?.id === SYSTEM_ORGANIZATION_ROOT_ID
 
   if (!userId) {
     return (
@@ -123,23 +153,23 @@ function PersonsPage() {
           <p className="text-sm text-muted-foreground mt-1">管理团队组织结构和成员信息</p>
         </div>
         {isAdmin && (
-          <div className="flex gap-2">
-            <Button onClick={handleCreateOrg} size="sm">
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={openCreateRoot} size="sm" variant="outline">
               <Plus className="h-4 w-4 mr-2" />
-              创建{selectedOrg ? '子' : ''}组织
+              创建根组织
             </Button>
-            {selectedOrg && (
-              <>
-                <Button variant="outline" size="sm">
-                  <Settings className="h-4 w-4 mr-2" />
-                  编辑组织
+            {selectedOrg &&
+              (isSystemRoot ? (
+                <Button variant="secondary" size="sm" disabled title="系统根组织不可删除">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  不可删除
                 </Button>
+              ) : (
                 <Button variant="destructive" size="sm" onClick={handleDeleteOrg}>
                   <Trash2 className="h-4 w-4 mr-2" />
                   删除组织
                 </Button>
-              </>
-            )}
+              ))}
           </div>
         )}
       </div>
@@ -160,17 +190,28 @@ function PersonsPage() {
           )}
         </div>
 
-        <div className="border rounded-lg p-4 overflow-hidden bg-card">
+        <div className="border rounded-lg p-4 overflow-hidden bg-card flex flex-col min-h-0">
           {selectedOrg ? (
-            <TeamMembersList
-              members={members}
-              organizationName={selectedOrg.display_name}
-              currentUserId={userId}
-              currentUserRole={currentUserRole}
-              onAddMember={handleAddMember}
-              onRemoveMember={handleRemoveMember}
-              onChangeRole={handleChangeRole}
-            />
+            <>
+              <OrganizationNodeToolbar
+                organization={selectedOrg}
+                isAdmin={isAdmin}
+                onEditName={() => setEditDialogOpen(true)}
+                onAddSibling={openCreateSibling}
+                onAddChild={openCreateChild}
+              />
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <TeamMembersList
+                  members={members}
+                  organizationName={selectedOrg.display_name}
+                  currentUserId={userId}
+                  currentUserRole={currentUserRole}
+                  onAddMember={handleAddMember}
+                  onRemoveMember={handleRemoveMember}
+                  onChangeRole={handleChangeRole}
+                />
+              </div>
+            </>
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               <p className="text-sm">请从左侧选择一个组织查看成员</p>
@@ -182,9 +223,22 @@ function PersonsPage() {
       <CreateOrgDialog
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
+        intent={createIntent}
         parentOrg={parentOrgForCreate}
+        referenceOrg={createReferenceOrg}
         onSubmit={async (input) => {
           await createOrganization(input)
+        }}
+      />
+
+      <EditOrganizationDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        organization={selectedOrg}
+        onSubmit={async (input) => {
+          if (!selectedOrg) return
+          const org = await updateOrganization(selectedOrg.id, input)
+          selectOrganization(org)
         }}
       />
 

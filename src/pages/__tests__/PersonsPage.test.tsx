@@ -19,6 +19,7 @@ vi.mock('@/stores/useAuthStore', () => ({
 const mockLoadTree = vi.fn()
 const mockSelectOrganization = vi.fn()
 const mockCreateOrganization = vi.fn()
+const mockUpdateOrganization = vi.fn()
 const mockDeleteOrganization = vi.fn()
 const mockGetUserOrgInfo = vi.fn()
 const mockAddMember = vi.fn()
@@ -44,6 +45,7 @@ vi.mock('@/hooks/useOrganization', () => ({
     loadTree: mockLoadTree,
     selectOrganization: mockSelectOrganization,
     createOrganization: mockCreateOrganization,
+    updateOrganization: mockUpdateOrganization,
     deleteOrganization: mockDeleteOrganization,
     getUserOrgInfo: mockGetUserOrgInfo,
     addMember: mockAddMember,
@@ -173,12 +175,12 @@ describe('PersonsPage', () => {
     expect(screen.getByText('研发部')).toBeInTheDocument()
   })
 
-  it('管理员应该看到"创建组织"按钮', async () => {
+  it('管理员应该看到「创建根组织」按钮', async () => {
     mockUserOrgInfo = { role: 'admin' }
 
     renderWithRouter(<PersonsPage />)
 
-    expect(screen.getByRole('button', { name: /创建.*组织/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /创建根组织/ })).toBeInTheDocument()
   })
 
   it('非管理员不应该看到管理按钮', async () => {
@@ -186,16 +188,28 @@ describe('PersonsPage', () => {
 
     renderWithRouter(<PersonsPage />)
 
-    expect(screen.queryByRole('button', { name: /创建.*组织/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /创建根组织/ })).not.toBeInTheDocument()
   })
 
-  it('管理员选择组织后应该看到编辑和删除按钮', async () => {
+  it('管理员选择组织后右侧应有结构编辑与删除', async () => {
     mockUserOrgInfo = { role: 'admin' }
-    mockSelectedOrg = { id: 'org1', display_name: '研发部' }
+    mockSelectedOrg = {
+      id: 'org1',
+      name: 'rnd',
+      display_name: '研发部',
+      parent_id: null,
+      path: 'rnd',
+      level: 0,
+      description: null,
+      created_at: '',
+      updated_at: '',
+    }
 
     renderWithRouter(<PersonsPage />)
 
-    expect(screen.getByRole('button', { name: /编辑组织/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /编辑名称/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /新增同级/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /新增子节点/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /删除组织/ })).toBeInTheDocument()
   })
 

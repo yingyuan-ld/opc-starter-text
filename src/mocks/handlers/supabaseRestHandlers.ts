@@ -2,6 +2,7 @@
  * Supabase REST API Mock Handlers
  * 用于拦截 /supabase-proxy/rest/v1/* 和 https://*.supabase.co/rest/v1/* 请求
  */
+import { SYSTEM_ORGANIZATION_ROOT_ID } from '@/config/constants'
 import { http, HttpResponse, delay } from 'msw'
 import { getRandomDelay } from '../data/mockConfig'
 
@@ -34,6 +35,14 @@ const REST_URL_PATTERNS = {
   personnel_records: [
     'http://localhost:5173/supabase-proxy/rest/v1/personnel_records',
     'https://*.supabase.co/rest/v1/personnel_records',
+  ],
+  rpc_admin_delete_organization: [
+    'http://localhost:5173/supabase-proxy/rest/v1/rpc/admin_delete_organization',
+    'https://*.supabase.co/rest/v1/rpc/admin_delete_organization',
+  ],
+  rpc_admin_create_organization: [
+    'http://localhost:5173/supabase-proxy/rest/v1/rpc/admin_create_organization',
+    'https://*.supabase.co/rest/v1/rpc/admin_create_organization',
   ],
 }
 
@@ -88,9 +97,10 @@ const MOCK_PROFILES: Record<string, unknown>[] = [
   {
     id: 'test-user-id-12345',
     email: 'test@example.com',
+    full_name: '测试用户',
     display_name: '测试用户',
     avatar_url: null,
-    role: 'user',
+    role: 'admin',
     organization_id: null,
     is_active: true,
     created_at: '2024-01-01T00:00:00.000Z',
@@ -98,7 +108,23 @@ const MOCK_PROFILES: Record<string, unknown>[] = [
   },
 ]
 
-const MOCK_ORGANIZATIONS: Record<string, unknown>[] = []
+const MOCK_ORGANIZATIONS: Record<string, unknown>[] = [
+  {
+    id: SYSTEM_ORGANIZATION_ROOT_ID,
+    name: 'opc_system_root',
+    display_name: '组织根（系统）',
+    short_name: null,
+    description: '不可删除的系统主根。',
+    parent_id: null,
+    path: 'opc_system_root',
+    level: 0,
+    sort_order: 0,
+    is_system_root: true,
+    created_at: '2024-01-01T00:00:00.000Z',
+    updated_at: '2024-01-01T00:00:00.000Z',
+    created_by: null,
+  },
+]
 
 const MOCK_AI_FUSION_TASKS: Record<string, unknown>[] = []
 
@@ -161,10 +187,17 @@ const handleGet =
 
     let filtered = result
     url.searchParams.forEach((value, key) => {
-      if (typeof value === 'string' && value.startsWith('eq.')) {
+      if (typeof value !== 'string') return
+      if (value.startsWith('eq.')) {
         const expected = value.slice(3)
         filtered = filtered.filter(
           (row) => String((row as Record<string, unknown>)[key] ?? '') === expected
+        )
+      } else if (value.startsWith('like.')) {
+        const raw = value.slice(5)
+        const prefix = raw.endsWith('%') ? raw.slice(0, -1) : raw
+        filtered = filtered.filter((row) =>
+          String((row as Record<string, unknown>)[key] ?? '').startsWith(prefix)
         )
       }
     })
@@ -270,6 +303,9 @@ const handleDelete =
     })
 
     if (idToDelete) {
+      if (tableName === 'organizations' && idToDelete === SYSTEM_ORGANIZATION_ROOT_ID) {
+        return HttpResponse.json({ message: '系统根组织不可删除', code: 'P0001' }, { status: 400 })
+      }
       const data = dataStore[tableName] || []
       const index = data.findIndex((item) => item.id === idToDelete)
       if (index !== -1) {
@@ -338,4 +374,111 @@ export const supabaseRestHandlers = [
     http.patch(pattern, handlePatch('personnel_records')),
     http.delete(pattern, handleDelete('personnel_records')),
   ]),
+
+  // RPC：创建组织（与 admin_create_organization 一致，供 MSW 本地联调）
+  ...REST_URL_PATTERNS.rpc_admin_create_organization.map((pattern) =>
+    http.post(pattern, async ({ request }) => {
+      await delay(getRandomDelay(100, 300))
+      const body = (await request.json()) as {
+        p_name?: string
+        p_display_name?: string
+        p_description?: string | null
+        p_parent_id?: string | null
+      }
+      const name = body.p_name?.trim()
+      const displayName = body.p_display_name?.trim()
+      if (!name || !displayName) {
+        return HttpResponse.json(
+          { message: 'name and display_name required', code: 'P0001' },
+          { status: 400 }
+        )
+      }
+      if (!/^[a-z0-9-]+$/.test(name)) {
+        return HttpResponse.json(
+          { message: 'Invalid organization name', code: 'P0001' },
+          { status: 400 }
+        )
+      }
+
+      const data = dataStore.organizations || []
+      if (data.some((row) => String((row as Record<string, unknown>).name) === name)) {
+        return HttpResponse.json(
+          { message: 'duplicate key value violates unique constraint', code: '23505' },
+          { status: 409 }
+        )
+      }
+
+      const parentId = body.p_parent_id ?? null
+      let parent: Record<string, unknown> | undefined
+      if (parentId) {
+        parent = data.find((row) => String((row as Record<string, unknown>).id) === parentId) as
+          | Record<string, unknown>
+          | undefined
+        if (!parent) {
+          return HttpResponse.json(
+            { message: 'Parent organization not found', code: 'P0001' },
+            { status: 400 }
+          )
+        }
+      }
+
+      const id =
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `mock-org-${Date.now()}`
+      const parentPath = parent ? String(parent.path ?? '') : ''
+      const path = parentPath ? `${parentPath}.${name}` : name
+      const level = parent ? Number(parent.level ?? 0) + 1 : 0
+
+      const row: Record<string, unknown> = {
+        id,
+        name,
+        display_name: displayName,
+        short_name: null,
+        description: body.p_description ?? null,
+        parent_id: parentId,
+        path,
+        level,
+        sort_order: 0,
+        is_system_root: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        created_by: null,
+      }
+      data.push(row)
+      console.log('[MSW REST] POST rpc/admin_create_organization', row)
+      return HttpResponse.json(id)
+    })
+  ),
+
+  // RPC：删除组织（与 supabase.rpc 一致）
+  ...REST_URL_PATTERNS.rpc_admin_delete_organization.map((pattern) =>
+    http.post(pattern, async ({ request }) => {
+      await delay(getRandomDelay(100, 300))
+      const body = (await request.json()) as { p_org_id?: string }
+      const id = body.p_org_id
+      if (id === SYSTEM_ORGANIZATION_ROOT_ID) {
+        return HttpResponse.json(
+          {
+            message: '系统根组织不可删除',
+            code: 'P0001',
+            hint: null,
+            details: null,
+          },
+          { status: 400 }
+        )
+      }
+      const data = dataStore.organizations || []
+      const index = data.findIndex((item) => item.id === id)
+      if (index === -1) {
+        return HttpResponse.json(
+          { message: 'Organization not found', code: 'P0001' },
+          { status: 400 }
+        )
+      }
+      data.splice(index, 1)
+      console.log('[MSW REST] POST rpc/admin_delete_organization', id)
+      return HttpResponse.json(null, { status: 204 })
+    })
+  ),
 ]

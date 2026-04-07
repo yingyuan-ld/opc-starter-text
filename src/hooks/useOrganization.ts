@@ -21,7 +21,7 @@ export interface UseOrganizationResult {
   uploadableOrgs: Organization[]
   isLoading: boolean
   error: string | null
-  loadTree: (rootId?: string) => Promise<void>
+  loadTree: (rootId?: string, options?: { skipCache?: boolean }) => Promise<void>
   selectOrganization: (org: Organization) => void
   loadMembers: (orgId: string) => Promise<void>
   createOrganization: (input: CreateOrganizationInput) => Promise<Organization>
@@ -72,12 +72,19 @@ export function useOrganization(userId: string): UseOrganizationResult {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const loadTree = useCallback(async (rootId?: string) => {
+  const loadTree = useCallback(async (rootId?: string, options?: { skipCache?: boolean }) => {
     try {
       setIsLoading(true)
       setError(null)
-      // 仅缓存完整树（无 rootId）
-      if (!rootId) {
+      if (!rootId && options?.skipCache) {
+        try {
+          localStorage.removeItem(ORG_TREE_CACHE_KEY)
+        } catch {
+          /* ignore */
+        }
+      }
+      // 仅缓存完整树（无 rootId）；变更后须 skipCache 拉最新
+      if (!rootId && !options?.skipCache) {
         const cachedTree = readCache<OrganizationTreeNode[]>(ORG_TREE_CACHE_KEY)
         if (cachedTree && cachedTree.length > 0) {
           setTree(cachedTree)
@@ -126,7 +133,7 @@ export function useOrganization(userId: string): UseOrganizationResult {
         setIsLoading(true)
         setError(null)
         const org = await organizationService.createOrganization(input, userId)
-        await loadTree()
+        await loadTree(undefined, { skipCache: true })
         return org
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Failed to create organization'
@@ -145,7 +152,7 @@ export function useOrganization(userId: string): UseOrganizationResult {
         setIsLoading(true)
         setError(null)
         const org = await organizationService.updateOrganization(id, input, userId)
-        await loadTree()
+        await loadTree(undefined, { skipCache: true })
         return org
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Failed to update organization'
@@ -164,7 +171,7 @@ export function useOrganization(userId: string): UseOrganizationResult {
         setIsLoading(true)
         setError(null)
         await organizationService.deleteOrganization(id, userId)
-        await loadTree()
+        await loadTree(undefined, { skipCache: true })
         if (selectedOrg?.id === id) {
           setSelectedOrg(null)
           setMembers([])
