@@ -28,6 +28,8 @@ export interface PersonnelCreateInput {
   phone: string
   address: string
   remark?: string
+  /** 可选；未传或 null 表示暂不关联组织 */
+  organizationId?: string | null
 }
 
 export type PersonnelUpdateInput = Partial<{

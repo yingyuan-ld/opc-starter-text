@@ -97,17 +97,20 @@ export async function createPersonnel(input: PersonnelCreateInput): Promise<Pers
   if (phoneErr) throw new Error(phoneErr)
   const phoneStored = normalizePhoneForStorage(input.phone)
 
-  const { data, error } = await supabase
-    .from('personnel_records')
-    .insert({
-      owner_id: user.id,
-      full_name: name,
-      gender: input.gender,
-      phone: phoneStored || null,
-      address: input.address.trim() || null,
-      remark: input.remark?.trim() || null,
-      is_active: true,
-    })
+  const insertRow: Record<string, unknown> = {
+    owner_id: user.id,
+    full_name: name,
+    gender: input.gender,
+    phone: phoneStored || null,
+    address: input.address.trim() || null,
+    remark: input.remark?.trim() || null,
+    is_active: true,
+  }
+  if (input.organizationId) {
+    insertRow.organization_id = input.organizationId
+  }
+
+  const { data, error } = await supabase.from('personnel_records').insert(insertRow)
     .select()
     .single()
 

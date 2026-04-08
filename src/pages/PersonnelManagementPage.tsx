@@ -16,6 +16,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { createPersonnel, listMyPersonnel, updatePersonnel } from '@/services/api/personnelService'
+import { organizationService } from '@/services/organization'
+import { useAuthStore } from '@/stores/useAuthStore'
+import type { Organization } from '@/lib/supabase/organizationTypes'
 import type { PersonnelGender, PersonnelRecord } from '@/types/personnel'
 import { cn } from '@/lib/utils'
 
@@ -27,15 +30,25 @@ const GENDER_LABEL: Record<PersonnelGender, string> = {
 }
 
 const GENDER_FILTER_ALL = ''
+/** 搜索：不按组织过滤 */
+const ORG_FILTER_ALL = ''
+/** 搜索：仅未关联组织的人员 */
+const ORG_FILTER_UNASSIGNED = '__unassigned__'
 
 function PersonnelManagementPage() {
+  const { user } = useAuthStore()
+  const userId = user?.id ?? ''
+
   const [items, setItems] = useState<PersonnelRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
+  const [viewableOrgs, setViewableOrgs] = useState<Organization[]>([])
+
   const [searchName, setSearchName] = useState('')
   const [searchGender, setSearchGender] = useState<string>(GENDER_FILTER_ALL)
   const [searchPhone, setSearchPhone] = useState('')
+  const [searchOrganization, setSearchOrganization] = useState(ORG_FILTER_ALL)
 
   const [addOpen, setAddOpen] = useState(false)
   const [detail, setDetail] = useState<PersonnelRecord | null>(null)
@@ -50,6 +63,8 @@ function PersonnelManagementPage() {
   const [formPhone, setFormPhone] = useState('')
   const [formAddress, setFormAddress] = useState('')
   const [formRemark, setFormRemark] = useState('')
+  /** 表单内组织：空字符串表示不关联 */
+  const [formOrganizationId, setFormOrganizationId] = useState('')
 
   const loadList = useCallback(async () => {
     setLoading(true)
@@ -68,8 +83,59 @@ function PersonnelManagementPage() {
     loadList()
   }, [loadList])
 
+  useEffect(() => {
+    if (!userId) {
+      setViewableOrgs([])
+      return
+    }
+    let cancelled = false
+    organizationService
+      .getViewableOrganizations(userId)
+      .then((orgs) => {
+        if (!cancelled) setViewableOrgs(orgs)
+      })
+      .catch(() => {
+        if (!cancelled) setViewableOrgs([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [userId])
+
+  const orgOptionsSorted = useMemo(
+    () =>
+      [...viewableOrgs].sort((a, b) =>
+        a.display_name.localeCompare(b.display_name, 'zh-Hans-CN')
+      ),
+    [viewableOrgs]
+  )
+
+  const editOrgOptions = useMemo(() => {
+    if (
+      editTarget?.organizationId &&
+      !orgOptionsSorted.some((o) => o.id === editTarget.organizationId)
+    ) {
+      const extra: Organization = {
+        id: editTarget.organizationId,
+        name: '',
+        display_name: editTarget.organizationDisplayName ?? editTarget.organizationId,
+        parent_id: null,
+        path: '',
+        level: 0,
+        description: null,
+        created_at: '',
+        updated_at: '',
+      }
+      return [extra, ...orgOptionsSorted]
+    }
+    return orgOptionsSorted
+  }, [editTarget, orgOptionsSorted])
+
   const filtersActive =
-    searchName.trim() !== '' || searchGender !== GENDER_FILTER_ALL || searchPhone.trim() !== ''
+    searchName.trim() !== '' ||
+    searchGender !== GENDER_FILTER_ALL ||
+    searchPhone.trim() !== '' ||
+    searchOrganization !== ORG_FILTER_ALL
 
   const filtered = useMemo(() => {
     const nq = searchName.trim().toLowerCase()
@@ -83,9 +149,14 @@ function PersonnelManagementPage() {
         const phoneNorm = p.phone.replace(/\s/g, '').toLowerCase()
         if (!phoneNorm.includes(pq)) return false
       }
+      if (searchOrganization === ORG_FILTER_UNASSIGNED) {
+        if (p.organizationId) return false
+      } else if (searchOrganization !== ORG_FILTER_ALL) {
+        if (p.organizationId !== searchOrganization) return false
+      }
       return true
     })
-  }, [items, searchName, searchGender, searchPhone])
+  }, [items, searchName, searchGender, searchPhone, searchOrganization])
 
   const resetForm = () => {
     setFormName('')
@@ -93,6 +164,7 @@ function PersonnelManagementPage() {
     setFormPhone('')
     setFormAddress('')
     setFormRemark('')
+    setFormOrganizationId('')
     setFormError(null)
   }
 
@@ -103,6 +175,7 @@ function PersonnelManagementPage() {
     setFormPhone(row.phone)
     setFormAddress(row.address)
     setFormRemark(row.remark ?? '')
+    setFormOrganizationId(row.organizationId ?? '')
     setFormError(null)
   }
 
@@ -117,6 +190,7 @@ function PersonnelManagementPage() {
         phone: formPhone,
         address: formAddress,
         remark: formRemark,
+        organizationId: formOrganizationId.trim() || null,
       })
       setAddOpen(false)
       resetForm()
@@ -140,6 +214,7 @@ function PersonnelManagementPage() {
         phone: formPhone,
         address: formAddress,
         remark: formRemark.trim() || null,
+        organizationId: formOrganizationId.trim() ? formOrganizationId.trim() : null,
       })
       setEditTarget(null)
       resetForm()
@@ -173,7 +248,7 @@ function PersonnelManagementPage() {
           <div>
             <h1 className="text-2xl font-semibold text-foreground">人员管理</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              按姓名、性别、手机号组合筛选；列表支持查看、编辑、禁用/启用
+              按姓名、组织、性别、手机号组合筛选；列表支持查看、编辑、禁用/启用
             </p>
           </div>
           <Button
@@ -193,7 +268,7 @@ function PersonnelManagementPage() {
             搜索区域
           </h2>
           <Card className="p-4">
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <div className="space-y-2">
                 <Label htmlFor="personnel-search-name" className="text-sm font-medium">
                   姓名
@@ -228,6 +303,25 @@ function PersonnelManagementPage() {
                   {(Object.keys(GENDER_LABEL) as PersonnelGender[]).map((g) => (
                     <option key={g} value={g}>
                       {GENDER_LABEL[g]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="personnel-search-org" className="text-sm font-medium">
+                  组织
+                </Label>
+                <select
+                  id="personnel-search-org"
+                  value={searchOrganization}
+                  onChange={(e) => setSearchOrganization(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value={ORG_FILTER_ALL}>全部</option>
+                  <option value={ORG_FILTER_UNASSIGNED}>未关联组织</option>
+                  {orgOptionsSorted.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.display_name}
                     </option>
                   ))}
                 </select>
@@ -464,6 +558,22 @@ function PersonnelManagementPage() {
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="pf-org">所属组织</Label>
+              <select
+                id="pf-org"
+                value={formOrganizationId}
+                onChange={(e) => setFormOrganizationId(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">不关联组织</option>
+                {orgOptionsSorted.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.display_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="pf-address">住址</Label>
               <Input
                 id="pf-address"
@@ -543,6 +653,22 @@ function PersonnelManagementPage() {
                 onChange={(e) => setFormPhone(e.target.value)}
                 autoComplete="tel"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pf-edit-org">所属组织</Label>
+              <select
+                id="pf-edit-org"
+                value={formOrganizationId}
+                onChange={(e) => setFormOrganizationId(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">不关联组织</option>
+                {editOrgOptions.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.display_name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="pf-edit-address">住址</Label>
