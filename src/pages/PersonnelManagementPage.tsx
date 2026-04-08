@@ -15,11 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  createPersonnel,
-  listMyPersonnel,
-  updatePersonnel,
-} from '@/services/api/personnelService'
+import { createPersonnel, listMyPersonnel, updatePersonnel } from '@/services/api/personnelService'
 import type { PersonnelGender, PersonnelRecord } from '@/types/personnel'
 import { cn } from '@/lib/utils'
 
@@ -259,8 +255,7 @@ function PersonnelManagementPage() {
               人员列表
             </h2>
             <span className="text-sm text-muted-foreground">
-              共 {filtered.length} 条
-              {filtersActive ? `（已筛选，全量 ${items.length} 条）` : ''}
+              共 {filtered.length} 条{filtersActive ? `（已筛选，全量 ${items.length} 条）` : ''}
             </span>
           </div>
 
@@ -300,13 +295,28 @@ function PersonnelManagementPage() {
                       <th scope="col" className="px-3 py-3 font-medium text-foreground">
                         电话
                       </th>
-                      <th scope="col" className="px-3 py-3 font-medium text-foreground min-w-[120px]">
+                      <th
+                        scope="col"
+                        className="px-3 py-3 font-medium text-foreground min-w-[100px]"
+                      >
+                        所属组织
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-3 py-3 font-medium text-foreground min-w-[120px]"
+                      >
                         住址
                       </th>
-                      <th scope="col" className="px-3 py-3 font-medium text-foreground whitespace-nowrap">
+                      <th
+                        scope="col"
+                        className="px-3 py-3 font-medium text-foreground whitespace-nowrap"
+                      >
                         状态
                       </th>
-                      <th scope="col" className="px-3 py-3 font-medium text-foreground text-right whitespace-nowrap">
+                      <th
+                        scope="col"
+                        className="px-3 py-3 font-medium text-foreground text-right whitespace-nowrap"
+                      >
                         操作
                       </th>
                     </tr>
@@ -317,7 +327,9 @@ function PersonnelManagementPage() {
                         key={row.id}
                         className={cn(
                           'border-b border-border last:border-0 transition-colors',
-                          row.isActive ? 'hover:bg-muted/30' : 'bg-muted/20 opacity-90 hover:bg-muted/25'
+                          row.isActive
+                            ? 'hover:bg-muted/30'
+                            : 'bg-muted/20 opacity-90 hover:bg-muted/25'
                         )}
                       >
                         <td
@@ -333,6 +345,12 @@ function PersonnelManagementPage() {
                         </td>
                         <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
                           {row.phone || '—'}
+                        </td>
+                        <td
+                          className="px-3 py-3 text-muted-foreground max-w-[140px] truncate"
+                          title={row.organizationDisplayName ?? undefined}
+                        >
+                          {row.organizationDisplayName ?? '—'}
                         </td>
                         <td className="px-3 py-3 text-muted-foreground max-w-[160px] truncate">
                           {row.address || '—'}
@@ -378,7 +396,9 @@ function PersonnelManagementPage() {
                               className="h-8"
                               disabled={rowBusyId === row.id}
                               onClick={() => handleToggleActive(row)}
-                              aria-label={row.isActive ? `禁用 ${row.fullName}` : `启用 ${row.fullName}`}
+                              aria-label={
+                                row.isActive ? `禁用 ${row.fullName}` : `启用 ${row.fullName}`
+                              }
                             >
                               {rowBusyId === row.id ? '…' : row.isActive ? '禁用' : '启用'}
                             </Button>
@@ -394,7 +414,13 @@ function PersonnelManagementPage() {
         </section>
       </div>
 
-      <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) resetForm() }}>
+      <Dialog
+        open={addOpen}
+        onOpenChange={(o) => {
+          setAddOpen(o)
+          if (!o) resetForm()
+        }}
+      >
         <DialogContent className="max-w-md" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>新增人员</DialogTitle>
@@ -537,7 +563,14 @@ function PersonnelManagementPage() {
             </div>
             {formError && <p className="text-sm text-destructive">{formError}</p>}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => { setEditTarget(null); resetForm() }}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setEditTarget(null)
+                  resetForm()
+                }}
+              >
                 取消
               </Button>
               <Button type="submit" disabled={submitting}>
@@ -548,7 +581,12 @@ function PersonnelManagementPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={detail !== null} onOpenChange={(o) => { if (!o) setDetail(null) }}>
+      <Dialog
+        open={detail !== null}
+        onOpenChange={(o) => {
+          if (!o) setDetail(null)
+        }}
+      >
         <DialogContent className="max-w-md" aria-describedby={undefined}>
           {detail && (
             <>
@@ -572,6 +610,10 @@ function PersonnelManagementPage() {
                 <div>
                   <dt className="text-muted-foreground">电话</dt>
                   <dd className="text-foreground">{detail.phone || '—'}</dd>
+                </div>
+                <div>
+                  <dt className="text-muted-foreground">所属组织</dt>
+                  <dd className="text-foreground">{detail.organizationDisplayName ?? '—'}</dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">住址</dt>

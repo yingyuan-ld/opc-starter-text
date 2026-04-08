@@ -14,6 +14,10 @@ export interface PersonnelRecord {
   remark: string | null
   /** 软禁用：false 时列表可辨识为已禁用 */
   isActive: boolean
+  /** 关联组织（人员管理与组织成员打通） */
+  organizationId: string | null
+  /** 列表展示用，由 organizations 解析 */
+  organizationDisplayName?: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -33,4 +37,6 @@ export type PersonnelUpdateInput = Partial<{
   address: string
   remark: string | null
   isActive: boolean
+  /** 设为 null 表示从组织移除（仅档案侧） */
+  organizationId: string | null
 }>

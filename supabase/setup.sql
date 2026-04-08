@@ -324,6 +324,14 @@ CREATE TRIGGER organizations_system_root_demotion
   BEFORE UPDATE ON public.organizations
   FOR EACH ROW EXECUTE FUNCTION organizations_prevent_system_root_demotion();
 
+-- personnel_records ↔ organizations（organizations 表须已存在）
+ALTER TABLE public.personnel_records
+  ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES public.organizations(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_personnel_records_organization
+  ON public.personnel_records(organization_id)
+  WHERE organization_id IS NOT NULL;
+
 -- -----------------------------------------------------
 -- 2.3 Organization Members
 -- -----------------------------------------------------
@@ -709,6 +717,15 @@ VALUES (
   '00004',
   'organizations_system_root',
   '组织：is_system_root 主根、种子行、admin_delete_organization、删除/降级触发器',
+  NULL
+)
+ON CONFLICT (seq) DO NOTHING;
+
+INSERT INTO public._schema_migrations (seq, name, description, story)
+VALUES (
+  '00005',
+  'personnel_records_organization_id',
+  '人员管理：personnel_records.organization_id 关联组织，与组织成员展示打通',
   NULL
 )
 ON CONFLICT (seq) DO NOTHING;

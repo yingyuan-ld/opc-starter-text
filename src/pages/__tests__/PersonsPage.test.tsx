@@ -22,10 +22,7 @@ const mockCreateOrganization = vi.fn()
 const mockUpdateOrganization = vi.fn()
 const mockDeleteOrganization = vi.fn()
 const mockGetUserOrgInfo = vi.fn()
-const mockAddMember = vi.fn()
-const mockRemoveMember = vi.fn()
-const mockChangeRole = vi.fn()
-const mockSearchUsers = vi.fn()
+const mockListMyPersonnel = vi.fn()
 
 let mockTree: {
   id: string
@@ -45,7 +42,6 @@ let mockSelectedOrg: {
   updated_at?: string
   is_system_root?: boolean
 } | null = null
-let mockMembers: { id: string; full_name: string }[] = []
 let mockUserOrgInfo: { role: string } | null = { role: 'member' }
 let mockIsLoading = false
 let mockError: string | null = null
@@ -54,7 +50,6 @@ vi.mock('@/hooks/useOrganization', () => ({
   useOrganization: () => ({
     tree: mockTree,
     selectedOrg: mockSelectedOrg,
-    members: mockMembers,
     userOrgInfo: mockUserOrgInfo,
     isLoading: mockIsLoading,
     error: mockError,
@@ -64,11 +59,13 @@ vi.mock('@/hooks/useOrganization', () => ({
     updateOrganization: mockUpdateOrganization,
     deleteOrganization: mockDeleteOrganization,
     getUserOrgInfo: mockGetUserOrgInfo,
-    addMember: mockAddMember,
-    removeMember: mockRemoveMember,
-    changeRole: mockChangeRole,
-    searchUsers: mockSearchUsers,
   }),
+}))
+
+vi.mock('@/services/api/personnelService', () => ({
+  listMyPersonnel: () => mockListMyPersonnel(),
+  listPersonnelAssignableToOrganization: vi.fn().mockResolvedValue([]),
+  updatePersonnel: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/components/organization/OrgTree', () => ({
@@ -166,11 +163,6 @@ vi.mock('@/components/organization/AddMemberDialog', () => ({
     open ? <div data-testid="add-member-dialog">AddMemberDialog</div> : null,
 }))
 
-vi.mock('@/components/organization/ChangeRoleDialog', () => ({
-  ChangeRoleDialog: ({ open }: { open: boolean }) =>
-    open ? <div data-testid="change-role-dialog">ChangeRoleDialog</div> : null,
-}))
-
 vi.mock('@/components/organization/EditOrganizationDialog', () => ({
   EditOrganizationDialog: ({ open }: { open: boolean }) =>
     open ? <div data-testid="edit-org-dialog">EditOrganizationDialog</div> : null,
@@ -182,10 +174,10 @@ describe('PersonsPage', () => {
     mockUser = { id: 'test-user-id' }
     mockTree = []
     mockSelectedOrg = null
-    mockMembers = []
     mockUserOrgInfo = { role: 'member' }
     mockIsLoading = false
     mockError = null
+    mockListMyPersonnel.mockResolvedValue([])
   })
 
   it('未登录时应该显示登录提示', async () => {

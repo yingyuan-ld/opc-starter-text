@@ -21,6 +21,7 @@ interface PersonnelRow {
   address: string | null
   remark: string | null
   is_active?: boolean | null
+  organization_id?: string | null
   created_at: string
   updated_at: string
 }
@@ -42,9 +43,32 @@ function mapRow(row: PersonnelRow): PersonnelRecord {
     address: row.address ?? '',
     remark: row.remark,
     isActive: row.is_active !== false,
+    organizationId: row.organization_id ?? null,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
   }
+}
+
+async function enrichOrganizationDisplayNames(rows: PersonnelRecord[]): Promise<PersonnelRecord[]> {
+  const ids = [...new Set(rows.map((r) => r.organizationId).filter((x): x is string => Boolean(x)))]
+  if (ids.length === 0) return rows
+
+  const { data, error } = await supabase
+    .from('organizations')
+    .select('id, display_name')
+    .in('id', ids)
+
+  if (error || !data?.length) return rows
+
+  const nameById = new Map(data.map((o) => [o.id as string, o.display_name as string]))
+  return rows.map((r) =>
+    r.organizationId
+      ? {
+          ...r,
+          organizationDisplayName: nameById.get(r.organizationId) ?? null,
+        }
+      : r
+  )
 }
 
 export async function listMyPersonnel(): Promise<PersonnelRecord[]> {
@@ -58,7 +82,8 @@ export async function listMyPersonnel(): Promise<PersonnelRecord[]> {
     .order('created_at', { ascending: false })
 
   if (error) throw new Error(error.message || '加载人员列表失败')
-  return (data ?? []).map((row) => mapRow(row as PersonnelRow))
+  const mapped = (data ?? []).map((row) => mapRow(row as PersonnelRow))
+  return enrichOrganizationDisplayNames(mapped)
 }
 
 export async function createPersonnel(input: PersonnelCreateInput): Promise<PersonnelRecord> {
@@ -87,10 +112,15 @@ export async function createPersonnel(input: PersonnelCreateInput): Promise<Pers
     .single()
 
   if (error) throw new Error(error.message || '新增人员失败')
-  return mapRow(data as PersonnelRow)
+  const rec = mapRow(data as PersonnelRow)
+  const [enriched] = await enrichOrganizationDisplayNames([rec])
+  return enriched
 }
 
-export async function updatePersonnel(id: string, input: PersonnelUpdateInput): Promise<PersonnelRecord> {
+export async function updatePersonnel(
+  id: string,
+  input: PersonnelUpdateInput
+): Promise<PersonnelRecord> {
   const user = await authService.getCurrentUser()
   if (!user) throw new Error('未登录')
 
@@ -109,6 +139,7 @@ export async function updatePersonnel(id: string, input: PersonnelUpdateInput): 
   if (input.address !== undefined) updates.address = input.address.trim() || null
   if (input.remark !== undefined) updates.remark = input.remark?.trim() || null
   if (input.isActive !== undefined) updates.is_active = input.isActive
+  if (input.organizationId !== undefined) updates.organization_id = input.organizationId
 
   if (Object.keys(updates).length === 0) {
     const existing = await getPersonnelById(id)
@@ -125,7 +156,9 @@ export async function updatePersonnel(id: string, input: PersonnelUpdateInput): 
     .single()
 
   if (error) throw new Error(error.message || '更新人员失败')
-  return mapRow(data as PersonnelRow)
+  const rec = mapRow(data as PersonnelRow)
+  const [enriched] = await enrichOrganizationDisplayNames([rec])
+  return enriched
 }
 
 export async function getPersonnelById(id: string): Promise<PersonnelRecord | null> {
@@ -141,5 +174,15 @@ export async function getPersonnelById(id: string): Promise<PersonnelRecord | nu
 
   if (error) throw new Error(error.message || '加载人员详情失败')
   if (!data) return null
-  return mapRow(data as PersonnelRow)
+  const rec = mapRow(data as PersonnelRow)
+  const [enriched] = await enrichOrganizationDisplayNames([rec])
+  return enriched
+}
+
+/** 当前用户名下、可分配至指定组织的人员档案（未归属或已归属其他组织时可再分配，由 UI 约束） */
+export async function listPersonnelAssignableToOrganization(
+  organizationId: string
+): Promise<PersonnelRecord[]> {
+  const all = await listMyPersonnel()
+  return all.filter((p) => !p.organizationId || p.organizationId !== organizationId)
 }

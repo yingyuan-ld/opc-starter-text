@@ -139,6 +139,7 @@ const MOCK_PERSONNEL_RECORDS: Record<string, unknown>[] = [
     address: '上海市示例路 1 号',
     remark: null,
     is_active: true,
+    organization_id: null,
     created_at: '2024-01-01T00:00:00.000Z',
     updated_at: '2024-01-01T00:00:00.000Z',
   },

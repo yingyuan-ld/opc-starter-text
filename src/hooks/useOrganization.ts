@@ -63,7 +63,16 @@ function writeCache<T>(key: string, data: T): void {
   }
 }
 
-export function useOrganization(userId: string): UseOrganizationResult {
+export type UseOrganizationOptions = {
+  /** 为 false 时不按 profiles 拉取组织「账号成员」（组织页仅以人员档案为准时使用） */
+  loadProfileMembers?: boolean
+}
+
+export function useOrganization(
+  userId: string,
+  options?: UseOrganizationOptions
+): UseOrganizationResult {
+  const loadProfileMembers = options?.loadProfileMembers !== false
   const [tree, setTree] = useState<OrganizationTreeNode[]>([])
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null)
   const [members, setMembers] = useState<Profile[]>([])
@@ -338,10 +347,14 @@ export function useOrganization(userId: string): UseOrganizationResult {
   }, [userId])
 
   useEffect(() => {
+    if (!loadProfileMembers) {
+      setMembers([])
+      return
+    }
     if (selectedOrg) {
       loadMembers(selectedOrg.id)
     }
-  }, [selectedOrg, loadMembers])
+  }, [selectedOrg, loadMembers, loadProfileMembers])
 
   return {
     tree,
