@@ -2,9 +2,8 @@
  * TeamMembersList - 组织参与人员（人员管理档案）
  * @description 成员以 personnel_records.organization_id 为准，与全系统业务参与人一致
  */
-import { UserMinus, UserPlus, FileUser } from 'lucide-react'
+import { UserMinus, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { PersonnelRecord } from '@/types/personnel'
 
@@ -56,17 +55,11 @@ export function TeamMembersList({
                 className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
               >
                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-muted flex items-center justify-center text-foreground">
-                    <FileUser className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium truncate">{p.fullName}</p>
-                      <Badge variant="outline" className="text-xs shrink-0">
-                        人员档案
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground truncate">{p.phone || '—'}</p>
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <p className="font-medium truncate">{p.fullName}</p>
+                    <span className="text-sm text-muted-foreground tabular-nums shrink-0">
+                      {p.phone || '—'}
+                    </span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">

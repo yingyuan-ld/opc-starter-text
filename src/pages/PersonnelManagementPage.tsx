@@ -256,7 +256,7 @@ function PersonnelManagementPage() {
             搜索区域
           </h2>
           <Card className="p-4">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div className="space-y-2">
                 <Label htmlFor="personnel-search-name" className="text-sm font-medium">
                   姓名

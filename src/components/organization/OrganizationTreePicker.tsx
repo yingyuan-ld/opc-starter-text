@@ -2,7 +2,7 @@
  * OrganizationTreePicker — 人员管理等场景：按真实层级选择组织（替代扁平下拉）
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Building2, ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { buildOrganizationTreeFromFlat } from '@/lib/organizationTreeUtils'
@@ -95,7 +95,6 @@ function PickerTreeRow({
             <span className="inline-block w-4" />
           )}
         </span>
-        <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
         <span className="truncate">{node.display_name}</span>
       </div>
       {hasChildren && expanded && (

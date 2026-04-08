@@ -6,9 +6,6 @@ import { useState } from 'react'
 import {
   ChevronRight,
   ChevronDown,
-  FolderClosed,
-  FolderOpen,
-  Building2,
   Users,
   Pencil,
   GitBranch,
@@ -151,18 +148,6 @@ function OrgTreeNodeComponent({
         ) : (
           <span className="inline-flex h-8 w-8 shrink-0" aria-hidden />
         )}
-
-        <div className="flex-shrink-0">
-          {hasChildren ? (
-            isExpanded ? (
-              <FolderOpen className="h-4 w-4 text-amber-600" />
-            ) : (
-              <FolderClosed className="h-4 w-4 text-amber-600" />
-            )
-          ) : (
-            <Building2 className="h-4 w-4 text-primary" />
-          )}
-        </div>
 
         <span className="min-w-0 flex-1 text-sm truncate">{node.display_name}</span>
 
