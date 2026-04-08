@@ -5,6 +5,7 @@
 import { SYSTEM_ORGANIZATION_ROOT_ID } from '@/config/constants'
 import { http, HttpResponse, delay } from 'msw'
 import { getRandomDelay } from '../data/mockConfig'
+import { hydrateMswDataStore, persistMswDataStore } from '../mswDataStorePersistence'
 
 // URL 模式 - 同时支持开发代理和生产环境
 const REST_URL_PATTERNS = {
@@ -143,7 +144,7 @@ const MOCK_PERSONNEL_RECORDS: Record<string, unknown>[] = [
   },
 ]
 
-// 数据存储
+// 数据存储（dev:test + MSW 下会经 localStorage 恢复，刷新页面后仍保留用户新增/修改）
 const dataStore: Record<string, Record<string, unknown>[]> = {
   photos: [...MOCK_PHOTOS],
   albums: [...MOCK_ALBUMS],
@@ -153,6 +154,20 @@ const dataStore: Record<string, Record<string, unknown>[]> = {
   ai_fusion_tasks: [...MOCK_AI_FUSION_TASKS],
   personnel_records: [...MOCK_PERSONNEL_RECORDS],
 }
+
+hydrateMswDataStore(dataStore)
+
+function ensureSystemOrganizationRoot(organizations: Record<string, unknown>[]): void {
+  const has = organizations.some(
+    (r) => String((r as { id?: string }).id) === SYSTEM_ORGANIZATION_ROOT_ID
+  )
+  if (!has) {
+    organizations.unshift({ ...(MOCK_ORGANIZATIONS[0] as Record<string, unknown>) })
+    persistMswDataStore(dataStore)
+  }
+}
+
+ensureSystemOrganizationRoot(dataStore.organizations)
 
 // 通用 GET 处理器 - 支持 select, order, eq 等查询参数
 const handleGet =
@@ -235,6 +250,7 @@ const handlePost =
 
     dataStore[tableName] = dataStore[tableName] || []
     dataStore[tableName].push(newRecord)
+    persistMswDataStore(dataStore)
 
     console.log(`[MSW REST] POST /${tableName}`, newRecord)
 
@@ -276,6 +292,7 @@ const handlePatch =
       }
       updatedRow = data[index] as Record<string, unknown>
       console.log(`[MSW REST] PATCH /${tableName}`, data[index])
+      persistMswDataStore(dataStore)
     }
 
     const prefer = request.headers.get('Prefer')
@@ -310,6 +327,7 @@ const handleDelete =
       const index = data.findIndex((item) => item.id === idToDelete)
       if (index !== -1) {
         data.splice(index, 1)
+        persistMswDataStore(dataStore)
         console.log(`[MSW REST] DELETE /${tableName}/${idToDelete}`)
       }
     }
@@ -446,6 +464,7 @@ export const supabaseRestHandlers = [
         created_by: null,
       }
       data.push(row)
+      persistMswDataStore(dataStore)
       console.log('[MSW REST] POST rpc/admin_create_organization', row)
       return HttpResponse.json(id)
     })
@@ -477,6 +496,7 @@ export const supabaseRestHandlers = [
         )
       }
       data.splice(index, 1)
+      persistMswDataStore(dataStore)
       console.log('[MSW REST] POST rpc/admin_delete_organization', id)
       return HttpResponse.json(null, { status: 204 })
     })
