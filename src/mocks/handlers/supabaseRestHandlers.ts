@@ -45,6 +45,10 @@ const REST_URL_PATTERNS = {
     'http://localhost:5173/supabase-proxy/rest/v1/rpc/admin_create_organization',
     'https://*.supabase.co/rest/v1/rpc/admin_create_organization',
   ],
+  rpc_get_user_accessible_organizations: [
+    'http://localhost:5173/supabase-proxy/rest/v1/rpc/get_user_accessible_organizations',
+    'https://*.supabase.co/rest/v1/rpc/get_user_accessible_organizations',
+  ],
 }
 
 // Mock 数据
@@ -393,6 +397,27 @@ export const supabaseRestHandlers = [
     http.patch(pattern, handlePatch('personnel_records')),
     http.delete(pattern, handleDelete('personnel_records')),
   ]),
+
+  // RPC：用户可访问组织 ID 列表（与 setup.sql get_user_accessible_organizations 一致，供 loadUploadableOrgs / 人员组织下拉）
+  ...REST_URL_PATTERNS.rpc_get_user_accessible_organizations.map((pattern) =>
+    http.post(pattern, async ({ request }) => {
+      await delay(getRandomDelay(100, 300))
+      const body = (await request.json()) as { user_uuid?: string }
+      if (!body?.user_uuid) {
+        return HttpResponse.json({ message: 'user_uuid required', code: 'P0001' }, { status: 400 })
+      }
+      ensureSystemOrganizationRoot(dataStore.organizations)
+      const orgs = dataStore.organizations || []
+      const rows = orgs.map((o) => ({
+        organization_id: String((o as Record<string, unknown>).id),
+      }))
+      console.log('[MSW REST] POST rpc/get_user_accessible_organizations', {
+        user_uuid: body.user_uuid,
+        count: rows.length,
+      })
+      return HttpResponse.json(rows)
+    })
+  ),
 
   // RPC：创建组织（与 admin_create_organization 一致，供 MSW 本地联调）
   ...REST_URL_PATTERNS.rpc_admin_create_organization.map((pattern) =>

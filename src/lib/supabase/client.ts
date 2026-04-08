@@ -15,8 +15,11 @@ const supabaseUrl = isMSWMode
   : import.meta.env.VITE_SUPABASE_URL || ''
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || (isMSWMode ? 'mock-anon-key' : '')
 
-if (!isMSWMode && (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY)) {
-  console.error('Missing Supabase environment variables. Auth features will be disabled.')
+if (!isMSWMode && (!supabaseUrl || !supabaseAnonKey)) {
+  throw new Error(
+    '[Supabase] 缺少 VITE_SUPABASE_URL 或 VITE_SUPABASE_ANON_KEY。请将 app/.env.example 复制为 app/.env.local 并填入 Dashboard > Settings > API 中的 URL 与 anon key；' +
+      '若本地无需真实后端，请在 .env.local 中设置 VITE_ENABLE_MSW=true，并使用 npm run dev:test 启动（同源 /supabase-proxy 供 MSW 拦截）。',
+  )
 }
 
 if (isMSWMode) {

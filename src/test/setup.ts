@@ -1,4 +1,9 @@
 /// <reference types="node" />
+import { vi } from 'vitest'
+
+// 单元测试未加载 .env.local 时，让 Supabase 客户端走 MSW 同源代理路径，避免 createClient 因空 URL 报错
+vi.stubEnv('VITE_ENABLE_MSW', 'true')
+
 import '@testing-library/jest-dom'
 
 // Polyfill Blob.arrayBuffer for jsdom

@@ -4,6 +4,12 @@
  */
 import { useState, useCallback, useEffect } from 'react'
 import { organizationService } from '@/services/organization'
+import {
+  LOCAL_STORAGE_SHORT_TTL_MS,
+  readTimedJsonCache,
+  writeTimedJsonCache,
+} from '@/lib/localStorageJsonCache'
+import { clearUploadableOrganizationListCache, uploadableOrgListStorageKey } from '@/lib/organizationUploadableCache'
 import type {
   Organization,
   OrganizationTreeNode,
@@ -38,30 +44,7 @@ export interface UseOrganizationResult {
   loadUploadableOrgs: () => Promise<void>
 }
 
-const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 const ORG_TREE_CACHE_KEY = 'org-tree:v1'
-const UPLOADABLE_ORG_CACHE_PREFIX = 'uploadable-orgs:v1:'
-
-function readCache<T>(key: string): T | null {
-  try {
-    const raw = localStorage.getItem(key)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as { ts: number; data: T }
-    if (!parsed || typeof parsed.ts !== 'number') return null
-    if (Date.now() - parsed.ts > CACHE_TTL) return null
-    return parsed.data
-  } catch {
-    return null
-  }
-}
-
-function writeCache<T>(key: string, data: T): void {
-  try {
-    localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }))
-  } catch {
-    // ignore write failures (e.g., storage quota)
-  }
-}
 
 export type UseOrganizationOptions = {
   /** 为 false 时不按 profiles 拉取组织「账号成员」（组织页仅以人员档案为准时使用） */
@@ -94,7 +77,10 @@ export function useOrganization(
       }
       // 仅缓存完整树（无 rootId）；变更后须 skipCache 拉最新
       if (!rootId && !options?.skipCache) {
-        const cachedTree = readCache<OrganizationTreeNode[]>(ORG_TREE_CACHE_KEY)
+        const cachedTree = readTimedJsonCache<OrganizationTreeNode[]>(
+          ORG_TREE_CACHE_KEY,
+          LOCAL_STORAGE_SHORT_TTL_MS
+        )
         if (cachedTree && cachedTree.length > 0) {
           setTree(cachedTree)
           setIsLoading(false)
@@ -106,7 +92,7 @@ export function useOrganization(
       setTree(treeData)
 
       if (!rootId && treeData.length > 0) {
-        writeCache(ORG_TREE_CACHE_KEY, treeData)
+        writeTimedJsonCache(ORG_TREE_CACHE_KEY, treeData)
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to load organization tree'
@@ -142,6 +128,7 @@ export function useOrganization(
         setIsLoading(true)
         setError(null)
         const org = await organizationService.createOrganization(input, userId)
+        clearUploadableOrganizationListCache(userId)
         await loadTree(undefined, { skipCache: true })
         return org
       } catch (err) {
@@ -161,6 +148,7 @@ export function useOrganization(
         setIsLoading(true)
         setError(null)
         const org = await organizationService.updateOrganization(id, input, userId)
+        clearUploadableOrganizationListCache(userId)
         await loadTree(undefined, { skipCache: true })
         return org
       } catch (err) {
@@ -180,6 +168,7 @@ export function useOrganization(
         setIsLoading(true)
         setError(null)
         await organizationService.deleteOrganization(id, userId)
+        clearUploadableOrganizationListCache(userId)
         await loadTree(undefined, { skipCache: true })
         if (selectedOrg?.id === id) {
           setSelectedOrg(null)
@@ -322,8 +311,8 @@ export function useOrganization(
     try {
       setIsLoading(true)
       setError(null)
-      const cacheKey = `${UPLOADABLE_ORG_CACHE_PREFIX}${userId}`
-      const cached = readCache<Organization[]>(cacheKey)
+      const cacheKey = uploadableOrgListStorageKey(userId)
+      const cached = readTimedJsonCache<Organization[]>(cacheKey, LOCAL_STORAGE_SHORT_TTL_MS)
       if (cached && cached.length > 0) {
         setUploadableOrgs(cached)
         setIsLoading(false)
@@ -334,7 +323,7 @@ export function useOrganization(
       setUploadableOrgs(orgs)
 
       if (orgs.length > 0) {
-        writeCache(cacheKey, orgs)
+        writeTimedJsonCache(cacheKey, orgs)
       }
     } catch (err) {
       const errorMsg =

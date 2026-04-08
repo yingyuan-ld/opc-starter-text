@@ -1,5 +1,6 @@
 /**
  * 人员管理 — /personnel（多条件搜索 + 列表操作列：查看 / 编辑 / 禁用·启用）
+ * 组织筛选与表单「所属组织」数据源：`useViewableOrganizations` → `organizationService.getViewableOrganizations`（与组织管理同源，PRD FR19/FR28）
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Plus, Search } from 'lucide-react'
@@ -16,7 +17,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { createPersonnel, listMyPersonnel, updatePersonnel } from '@/services/api/personnelService'
-import { organizationService } from '@/services/organization'
+import { useViewableOrganizations } from '@/hooks/useViewableOrganizations'
 import { useAuthStore } from '@/stores/useAuthStore'
 import type { Organization } from '@/lib/supabase/organizationTypes'
 import type { PersonnelGender, PersonnelRecord } from '@/types/personnel'
@@ -39,11 +40,16 @@ function PersonnelManagementPage() {
   const { user } = useAuthStore()
   const userId = user?.id ?? ''
 
+  const {
+    organizations: viewableOrgs,
+    loading: orgsLoading,
+    error: orgsLoadError,
+    refetch: refetchViewableOrgs,
+  } = useViewableOrganizations(userId)
+
   const [items, setItems] = useState<PersonnelRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
-
-  const [viewableOrgs, setViewableOrgs] = useState<Organization[]>([])
 
   const [searchName, setSearchName] = useState('')
   const [searchGender, setSearchGender] = useState<string>(GENDER_FILTER_ALL)
@@ -82,25 +88,6 @@ function PersonnelManagementPage() {
   useEffect(() => {
     loadList()
   }, [loadList])
-
-  useEffect(() => {
-    if (!userId) {
-      setViewableOrgs([])
-      return
-    }
-    let cancelled = false
-    organizationService
-      .getViewableOrganizations(userId)
-      .then((orgs) => {
-        if (!cancelled) setViewableOrgs(orgs)
-      })
-      .catch(() => {
-        if (!cancelled) setViewableOrgs([])
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [userId])
 
   const orgOptionsSorted = useMemo(
     () =>
@@ -315,7 +302,9 @@ function PersonnelManagementPage() {
                   id="personnel-search-org"
                   value={searchOrganization}
                   onChange={(e) => setSearchOrganization(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  disabled={orgsLoading}
+                  aria-busy={orgsLoading}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
                 >
                   <option value={ORG_FILTER_ALL}>全部</option>
                   <option value={ORG_FILTER_UNASSIGNED}>未关联组织</option>
@@ -340,6 +329,24 @@ function PersonnelManagementPage() {
                 />
               </div>
             </div>
+            {(orgsLoading || orgsLoadError) && (
+              <div className="mt-3 text-sm flex flex-wrap items-center gap-2">
+                {orgsLoading && <span className="text-muted-foreground">组织列表加载中…</span>}
+                {orgsLoadError && (
+                  <>
+                    <span className="text-destructive">{orgsLoadError}</span>
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="h-auto p-0 text-sm"
+                      onClick={() => void refetchViewableOrgs()}
+                    >
+                      重试
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
           </Card>
         </section>
 
@@ -563,7 +570,8 @@ function PersonnelManagementPage() {
                 id="pf-org"
                 value={formOrganizationId}
                 onChange={(e) => setFormOrganizationId(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                disabled={orgsLoading}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
               >
                 <option value="">不关联组织</option>
                 {orgOptionsSorted.map((o) => (
@@ -660,7 +668,8 @@ function PersonnelManagementPage() {
                 id="pf-edit-org"
                 value={formOrganizationId}
                 onChange={(e) => setFormOrganizationId(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                disabled={orgsLoading}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
               >
                 <option value="">不关联组织</option>
                 {editOrgOptions.map((o) => (

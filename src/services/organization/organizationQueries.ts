@@ -272,7 +272,7 @@ export class OrganizationQueries {
     return memoryCache.getOrFetch(
       cacheKey,
       async () => {
-        const { data, error } = await supabase.rpc('get_user_uploadable_organizations', {
+        const { data, error } = await supabase.rpc('get_user_accessible_organizations', {
           user_uuid: userId,
         })
 

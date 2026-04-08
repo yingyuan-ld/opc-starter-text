@@ -85,9 +85,14 @@ class OrganizationService {
   async searchUsers(query: string): Promise<Profile[]> {
     return this.queries.searchUsers(query)
   }
+  /**
+   * 当前用户可挂载/关联业务的组织列表（RPC `get_user_accessible_organizations` + `organizations`，见 setup.sql）。
+   * 人员管理中的组织筛选与「所属组织」字段须通过本方法或 {@link getViewableOrganizations} 获取，与组织管理同源（PRD FR19/FR28）。
+   */
   async getUploadableOrganizations(userId: string): Promise<Organization[]> {
     return this.queries.getUploadableOrganizations(userId)
   }
+  /** 与 {@link getUploadableOrganizations} 等价别名，供产品文档与人员模块语义对齐 */
   async getViewableOrganizations(userId: string): Promise<Organization[]> {
     return this.queries.getViewableOrganizations(userId)
   }
