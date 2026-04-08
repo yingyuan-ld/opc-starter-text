@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { useViewableOrganizations } from '../useViewableOrganizations'
 import PersonnelManagementPage from '@/pages/PersonnelManagementPage'
 import { renderWithRouter } from '@/test/testUtils'
@@ -70,15 +71,18 @@ describe('人员管理 ↔ 组织数据联通', () => {
     expect(uploadableOrgListStorageKey('user-qa')).toBe('uploadable-orgs:v1:user-qa')
   })
 
-  it('人员管理页搜索区「组织」下拉包含 getViewableOrganizations 返回的展示名', async () => {
+  it('人员管理页搜索区组织树选择包含 getViewableOrganizations 返回的展示名', async () => {
+    const user = userEvent.setup()
     renderWithRouter(<PersonnelManagementPage />)
 
     await waitFor(() => {
       expect(orgServiceMocks.getViewableOrganizations).toHaveBeenCalledWith('user-qa')
     })
 
+    await user.click(screen.getByRole('button', { name: '全部' }))
+
     await waitFor(() => {
-      expect(screen.getByRole('option', { name: 'QA联通组织A' })).toBeInTheDocument()
+      expect(screen.getByText('QA联通组织A')).toBeInTheDocument()
     })
   })
 })

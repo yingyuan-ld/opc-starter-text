@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { createPersonnel, listMyPersonnel, updatePersonnel } from '@/services/api/personnelService'
+import { OrganizationTreePicker } from '@/components/organization/OrganizationTreePicker'
 import { useViewableOrganizations } from '@/hooks/useViewableOrganizations'
 import { useAuthStore } from '@/stores/useAuthStore'
 import type { Organization } from '@/lib/supabase/organizationTypes'
@@ -298,22 +299,15 @@ function PersonnelManagementPage() {
                 <Label htmlFor="personnel-search-org" className="text-sm font-medium">
                   组织
                 </Label>
-                <select
+                <OrganizationTreePicker
                   id="personnel-search-org"
+                  mode="search"
+                  variant="popover"
                   value={searchOrganization}
-                  onChange={(e) => setSearchOrganization(e.target.value)}
+                  onValueChange={setSearchOrganization}
+                  organizations={orgOptionsSorted}
                   disabled={orgsLoading}
-                  aria-busy={orgsLoading}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-                >
-                  <option value={ORG_FILTER_ALL}>全部</option>
-                  <option value={ORG_FILTER_UNASSIGNED}>未关联组织</option>
-                  {orgOptionsSorted.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.display_name}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="personnel-search-phone" className="text-sm font-medium">
@@ -522,7 +516,7 @@ function PersonnelManagementPage() {
           if (!o) resetForm()
         }}
       >
-        <DialogContent className="max-w-md" aria-describedby={undefined}>
+        <DialogContent className="max-w-lg" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>新增人员</DialogTitle>
             <DialogDescription>带 * 为必填项；新建默认为启用</DialogDescription>
@@ -566,20 +560,16 @@ function PersonnelManagementPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="pf-org">所属组织</Label>
-              <select
+              <p className="text-xs text-muted-foreground">按组织树选择（与组织管理层级一致）</p>
+              <OrganizationTreePicker
                 id="pf-org"
+                mode="form"
+                variant="inline"
                 value={formOrganizationId}
-                onChange={(e) => setFormOrganizationId(e.target.value)}
+                onValueChange={setFormOrganizationId}
+                organizations={orgOptionsSorted}
                 disabled={orgsLoading}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-              >
-                <option value="">不关联组织</option>
-                {orgOptionsSorted.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.display_name}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="pf-address">住址</Label>
@@ -620,7 +610,7 @@ function PersonnelManagementPage() {
           }
         }}
       >
-        <DialogContent className="max-w-md" aria-describedby={undefined}>
+        <DialogContent className="max-w-lg" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>编辑人员</DialogTitle>
             <DialogDescription>修改后保存；启用状态请使用列表中的禁用/启用</DialogDescription>
@@ -664,20 +654,16 @@ function PersonnelManagementPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="pf-edit-org">所属组织</Label>
-              <select
+              <p className="text-xs text-muted-foreground">按组织树选择（与组织管理层级一致）</p>
+              <OrganizationTreePicker
                 id="pf-edit-org"
+                mode="form"
+                variant="inline"
                 value={formOrganizationId}
-                onChange={(e) => setFormOrganizationId(e.target.value)}
+                onValueChange={setFormOrganizationId}
+                organizations={editOrgOptions}
                 disabled={orgsLoading}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-              >
-                <option value="">不关联组织</option>
-                {editOrgOptions.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.display_name}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="pf-edit-address">住址</Label>
