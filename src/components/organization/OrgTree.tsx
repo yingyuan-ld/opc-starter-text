@@ -1,16 +1,35 @@
 /**
  * OrgTree - 组织架构树组件
- * @description 递归渲染组织层级树，支持节点展开/折叠和选中交互
+ * @description 递归渲染组织层级树；管理员在选中行右侧展示编辑/新增/删除
  */
 import { useState } from 'react'
-import { ChevronRight, ChevronDown, FolderClosed, FolderOpen, Building2, Users } from 'lucide-react'
+import {
+  ChevronRight,
+  ChevronDown,
+  FolderClosed,
+  FolderOpen,
+  Building2,
+  Users,
+  Pencil,
+  GitBranch,
+  Plus,
+  Trash2,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { OrganizationTreeNode } from '@/lib/supabase/organizationTypes'
 
-interface OrgTreeProps {
+export interface OrgTreeProps {
   tree: OrganizationTreeNode[]
   selectedId: string | null
   onSelect: (node: OrganizationTreeNode) => void
+  /** 与 constants 中系统根 id 一致，用于禁用根级「同级/删除」 */
+  systemRootId: string
+  isAdmin?: boolean
+  onEditNode?: () => void
+  onAddSibling?: () => void
+  onAddChild?: () => void
+  onDeleteNode?: () => void
   className?: string
 }
 
@@ -21,6 +40,12 @@ interface OrgTreeNodeProps {
   onSelect: (node: OrganizationTreeNode) => void
   expandedIds: Set<string>
   onToggleExpand: (id: string) => void
+  systemRootId: string
+  isAdmin?: boolean
+  onEditNode?: () => void
+  onAddSibling?: () => void
+  onAddChild?: () => void
+  onDeleteNode?: () => void
 }
 
 function OrgTreeNodeComponent({
@@ -30,10 +55,20 @@ function OrgTreeNodeComponent({
   onSelect,
   expandedIds,
   onToggleExpand,
+  systemRootId,
+  isAdmin,
+  onEditNode,
+  onAddSibling,
+  onAddChild,
+  onDeleteNode,
 }: OrgTreeNodeProps) {
   const isExpanded = expandedIds.has(node.id)
   const isSelected = selectedId === node.id
   const hasChildren = node.children && node.children.length > 0
+  const isSystemRoot = node.is_system_root === true || node.id === systemRootId
+  const showActions = Boolean(
+    isAdmin && isSelected && (onEditNode || onAddSibling || onAddChild || onDeleteNode)
+  )
 
   const handleSelect = () => {
     onSelect(node)
@@ -67,6 +102,10 @@ function OrgTreeNodeComponent({
     ? `折叠「${node.display_name}」下的子组织`
     : `展开「${node.display_name}」下的子组织`
 
+  const stopRowActivate = (e: React.MouseEvent) => {
+    e.stopPropagation()
+  }
+
   return (
     <div>
       <div
@@ -75,7 +114,7 @@ function OrgTreeNodeComponent({
         aria-expanded={hasChildren ? isExpanded : undefined}
         tabIndex={0}
         className={cn(
-          'flex items-center gap-1 py-2 px-2 cursor-pointer rounded-md hover:bg-accent transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'flex items-center gap-1 py-2 px-2 cursor-pointer rounded-md hover:bg-accent transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring min-w-0',
           isSelected && 'bg-accent font-medium',
           'group'
         )}
@@ -125,12 +164,86 @@ function OrgTreeNodeComponent({
           )}
         </div>
 
-        <span className="flex-1 text-sm truncate">{node.display_name}</span>
+        <span className="min-w-0 flex-1 text-sm truncate">{node.display_name}</span>
 
         {node.member_count !== undefined && node.member_count > 0 && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
             <Users className="h-3 w-3" />
             <span>{node.member_count}</span>
+          </div>
+        )}
+
+        {showActions && (
+          <div
+            className="flex shrink-0 items-center gap-0.5 border-l border-border/60 pl-1 ml-0.5"
+            onClick={stopRowActivate}
+            onKeyDown={(e) => e.stopPropagation()}
+            role="toolbar"
+            aria-label={`「${node.display_name}」操作`}
+          >
+            {onEditNode && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                aria-label="编辑名称"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onEditNode()
+                }}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            )}
+            {!isSystemRoot && onAddSibling && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                aria-label="新增同级"
+                title="新增同级"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onAddSibling()
+                }}
+              >
+                <GitBranch className="h-4 w-4" />
+              </Button>
+            )}
+            {onAddChild && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                aria-label="新增子节点"
+                title="新增子节点"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onAddChild()
+                }}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            )}
+            {!isSystemRoot && onDeleteNode && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                aria-label="删除组织"
+                title="删除组织"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDeleteNode()
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -146,6 +259,12 @@ function OrgTreeNodeComponent({
               onSelect={onSelect}
               expandedIds={expandedIds}
               onToggleExpand={onToggleExpand}
+              systemRootId={systemRootId}
+              isAdmin={isAdmin}
+              onEditNode={onEditNode}
+              onAddSibling={onAddSibling}
+              onAddChild={onAddChild}
+              onDeleteNode={onDeleteNode}
             />
           ))}
         </div>
@@ -154,8 +273,18 @@ function OrgTreeNodeComponent({
   )
 }
 
-export function OrgTree({ tree, selectedId, onSelect, className }: OrgTreeProps) {
-  // 默认展开所有根节点
+export function OrgTree({
+  tree,
+  selectedId,
+  onSelect,
+  systemRootId,
+  isAdmin,
+  onEditNode,
+  onAddSibling,
+  onAddChild,
+  onDeleteNode,
+  className,
+}: OrgTreeProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
     const rootIds = new Set<string>()
     tree.forEach((node) => {
@@ -197,6 +326,12 @@ export function OrgTree({ tree, selectedId, onSelect, className }: OrgTreeProps)
           onSelect={onSelect}
           expandedIds={expandedIds}
           onToggleExpand={handleToggleExpand}
+          systemRootId={systemRootId}
+          isAdmin={isAdmin}
+          onEditNode={onEditNode}
+          onAddSibling={onAddSibling}
+          onAddChild={onAddChild}
+          onDeleteNode={onDeleteNode}
         />
       ))}
     </div>

@@ -1,5 +1,5 @@
 /**
- * EditOrganizationDialog - 编辑组织信息（展示名、标识、描述）
+ * EditOrganizationDialog - 编辑组织（展示名、描述；技术标识不暴露）
  */
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -29,7 +29,6 @@ export function EditOrganizationDialog({
   organization,
   onSubmit,
 }: EditOrganizationDialogProps) {
-  const [name, setName] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [description, setDescription] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -37,7 +36,6 @@ export function EditOrganizationDialog({
 
   useEffect(() => {
     if (open && organization) {
-      setName(organization.name)
       setDisplayName(organization.display_name)
       setDescription(organization.description ?? '')
       setError(null)
@@ -46,13 +44,12 @@ export function EditOrganizationDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!organization || !name.trim() || !displayName.trim()) return
+    if (!organization || !displayName.trim()) return
 
     setIsSubmitting(true)
     setError(null)
     try {
       await onSubmit({
-        name: name.trim(),
         display_name: displayName.trim(),
         description: description.trim() || null,
       })
@@ -77,19 +74,6 @@ export function EditOrganizationDialog({
 
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-org-name">组织标识 *</Label>
-              <Input
-                id="edit-org-name"
-                placeholder="小写字母、数字、横线"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                pattern="[a-z0-9-]+"
-              />
-              <p className="text-xs text-muted-foreground">修改标识可能影响路径，请谨慎操作</p>
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="edit-org-display">显示名称 *</Label>
               <Input
                 id="edit-org-display"
@@ -113,10 +97,15 @@ export function EditOrganizationDialog({
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
+            >
               取消
             </Button>
-            <Button type="submit" disabled={isSubmitting || !name.trim() || !displayName.trim()}>
+            <Button type="submit" disabled={isSubmitting || !displayName.trim()}>
               {isSubmitting ? '保存中…' : '保存'}
             </Button>
           </DialogFooter>

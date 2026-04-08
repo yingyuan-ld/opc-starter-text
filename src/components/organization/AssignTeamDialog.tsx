@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { OrgTree } from '@/components/organization/OrgTree'
+import { SYSTEM_ORGANIZATION_ROOT_ID } from '@/config/constants'
 import type { OrganizationTreeNode, Organization } from '@/lib/supabase/organizationTypes'
 
 interface AssignTeamDialogProps {
@@ -78,6 +79,7 @@ export function AssignTeamDialog({
                 tree={organizationTree}
                 selectedId={selectedOrg?.id || null}
                 onSelect={handleSelectOrg}
+                systemRootId={SYSTEM_ORGANIZATION_ROOT_ID}
               />
             </div>
 

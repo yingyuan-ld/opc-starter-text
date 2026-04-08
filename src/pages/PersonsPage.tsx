@@ -1,15 +1,12 @@
 /**
  * PersonsPage - 人员/组织管理页面
- * @description 展示组织树、团队成员列表，支持创建组织、添加成员、分配团队等操作
+ * @description 展示组织树、团队成员列表；组织结构操作在树节点行内（管理员）
  */
 import { useEffect, useState, useRef } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { OrgTree } from '@/components/organization/OrgTree'
 import { TeamMembersList } from '@/components/organization/TeamMembersList'
 import { CreateOrgDialog, type CreateOrgIntent } from '@/components/organization/CreateOrgDialog'
 import { EditOrganizationDialog } from '@/components/organization/EditOrganizationDialog'
-import { OrganizationNodeToolbar } from '@/components/organization/OrganizationNodeToolbar'
 import { AddMemberDialog } from '@/components/organization/AddMemberDialog'
 import { ChangeRoleDialog } from '@/components/organization/ChangeRoleDialog'
 import { SYSTEM_ORGANIZATION_ROOT_ID } from '@/config/constants'
@@ -43,7 +40,7 @@ function PersonsPage() {
   } = useOrganization(userId)
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
-  const [createIntent, setCreateIntent] = useState<CreateOrgIntent>('root')
+  const [createIntent, setCreateIntent] = useState<CreateOrgIntent>('child')
   const [createReferenceOrg, setCreateReferenceOrg] = useState<Organization | null>(null)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [parentOrgForCreate, setParentOrgForCreate] = useState<OrganizationTreeNode | null>(null)
@@ -61,13 +58,6 @@ function PersonsPage() {
 
   const handleSelectOrg = (node: OrganizationTreeNode) => {
     selectOrganization(node)
-  }
-
-  const openCreateRoot = () => {
-    setCreateIntent('root')
-    setParentOrgForCreate(null)
-    setCreateReferenceOrg(null)
-    setCreateDialogOpen(true)
   }
 
   const openCreateChild = () => {
@@ -134,8 +124,6 @@ function PersonsPage() {
 
   const currentUserRole = userOrgInfo?.role || 'member'
   const isAdmin = currentUserRole === 'admin'
-  const isSystemRoot =
-    selectedOrg?.is_system_root === true || selectedOrg?.id === SYSTEM_ORGANIZATION_ROOT_ID
 
   if (!userId) {
     return (
@@ -152,26 +140,6 @@ function PersonsPage() {
           <h1 className="text-3xl font-bold">组织架构与人员管理</h1>
           <p className="text-sm text-muted-foreground mt-1">管理团队组织结构和成员信息</p>
         </div>
-        {isAdmin && (
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={openCreateRoot} size="sm" variant="outline">
-              <Plus className="h-4 w-4 mr-2" />
-              创建根组织
-            </Button>
-            {selectedOrg &&
-              (isSystemRoot ? (
-                <Button variant="secondary" size="sm" disabled title="系统根组织不可删除">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  不可删除
-                </Button>
-              ) : (
-                <Button variant="destructive" size="sm" onClick={handleDeleteOrg}>
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  删除组织
-                </Button>
-              ))}
-          </div>
-        )}
       </div>
 
       {error && (
@@ -180,38 +148,39 @@ function PersonsPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4 h-[calc(100%-5rem)]">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(300px,420px)_1fr] gap-4 h-[calc(100%-5rem)]">
         <div className="border rounded-lg p-4 overflow-y-auto bg-card">
           <h2 className="text-lg font-semibold mb-3">组织树</h2>
           {isLoading && !tree.length ? (
             <p className="text-sm text-muted-foreground">加载中...</p>
           ) : (
-            <OrgTree tree={tree} selectedId={selectedOrg?.id || null} onSelect={handleSelectOrg} />
+            <OrgTree
+              tree={tree}
+              selectedId={selectedOrg?.id || null}
+              onSelect={handleSelectOrg}
+              systemRootId={SYSTEM_ORGANIZATION_ROOT_ID}
+              isAdmin={isAdmin}
+              onEditNode={isAdmin ? () => setEditDialogOpen(true) : undefined}
+              onAddSibling={isAdmin ? openCreateSibling : undefined}
+              onAddChild={isAdmin ? openCreateChild : undefined}
+              onDeleteNode={isAdmin ? handleDeleteOrg : undefined}
+            />
           )}
         </div>
 
         <div className="border rounded-lg p-4 overflow-hidden bg-card flex flex-col min-h-0">
           {selectedOrg ? (
-            <>
-              <OrganizationNodeToolbar
-                organization={selectedOrg}
-                isAdmin={isAdmin}
-                onEditName={() => setEditDialogOpen(true)}
-                onAddSibling={openCreateSibling}
-                onAddChild={openCreateChild}
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <TeamMembersList
+                members={members}
+                organizationName={selectedOrg.display_name}
+                currentUserId={userId}
+                currentUserRole={currentUserRole}
+                onAddMember={handleAddMember}
+                onRemoveMember={handleRemoveMember}
+                onChangeRole={handleChangeRole}
               />
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                <TeamMembersList
-                  members={members}
-                  organizationName={selectedOrg.display_name}
-                  currentUserId={userId}
-                  currentUserRole={currentUserRole}
-                  onAddMember={handleAddMember}
-                  onRemoveMember={handleRemoveMember}
-                  onChangeRole={handleChangeRole}
-                />
-              </div>
-            </>
+            </div>
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               <p className="text-sm">请从左侧选择一个组织查看成员</p>
