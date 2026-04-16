@@ -25,7 +25,9 @@ import { useViewableOrganizations } from '@/hooks/useViewableOrganizations'
 import { useAuthStore } from '@/stores/useAuthStore'
 import type { Organization } from '@/lib/supabase/organizationTypes'
 import type { PersonnelGender, PersonnelRecord } from '@/types/personnel'
+import { validateOptionalMainlandMobile } from '@/utils/phoneValidation'
 import type { ColumnsType } from 'antd/es/table'
+import type { DefaultOptionType } from 'antd/es/select'
 
 const GENDER_LABEL: Record<PersonnelGender, string> = {
   unknown: '未知',
@@ -41,7 +43,73 @@ const ORG_FILTER_ALL = ''
 const ORG_FILTER_UNASSIGNED = '__unassigned__'
 const FORM_ORG_UNASSIGNED = ''
 
+interface PersonnelFormValues {
+  fullName: string
+  gender: PersonnelGender
+  phone: string
+  organizationId: string
+  address: string
+  remark: string
+}
+
+type OrgOptionMeta = {
+  org: Organization
+  depth: number
+}
+
+function flattenOrganizationsForSelect(orgs: Organization[]): OrgOptionMeta[] {
+  const byId = new Map(orgs.map((org) => [org.id, org]))
+  const childrenMap = new Map<string | null, Organization[]>()
+
+  for (const org of orgs) {
+    const parentId = org.parent_id && byId.has(org.parent_id) ? org.parent_id : null
+    const list = childrenMap.get(parentId) ?? []
+    list.push(org)
+    childrenMap.set(parentId, list)
+  }
+
+  for (const list of childrenMap.values()) {
+    list.sort((a, b) => a.display_name.localeCompare(b.display_name, 'zh-Hans-CN'))
+  }
+
+  const result: OrgOptionMeta[] = []
+  const visited = new Set<string>()
+  const walk = (parentId: string | null, depth: number) => {
+    const children = childrenMap.get(parentId) ?? []
+    for (const child of children) {
+      if (visited.has(child.id)) continue
+      visited.add(child.id)
+      result.push({ org: child, depth })
+      walk(child.id, depth + 1)
+    }
+  }
+
+  walk(null, 0)
+
+  // 兜底：若出现孤儿节点或异常循环，补充未访问节点
+  if (visited.size < orgs.length) {
+    for (const org of orgs) {
+      if (!visited.has(org.id)) {
+        result.push({ org, depth: Math.max(org.level ?? 0, 0) })
+      }
+    }
+  }
+
+  return result
+}
+
+function toIndentedOrgOption(item: OrgOptionMeta): DefaultOptionType {
+  const indent = item.depth * 16
+  return {
+    value: item.org.id,
+    plainLabel: item.org.display_name,
+    label: <span style={{ paddingInlineStart: indent, display: 'inline-block' }}>{item.org.display_name}</span>,
+  }
+}
+
 function PersonnelManagementPage() {
+  const [addForm] = Form.useForm<PersonnelFormValues>()
+  const [editForm] = Form.useForm<PersonnelFormValues>()
   const { user } = useAuthStore()
   const userId = user?.id ?? ''
 
@@ -69,14 +137,6 @@ function PersonnelManagementPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [rowBusyId, setRowBusyId] = useState<string | null>(null)
 
-  const [formName, setFormName] = useState('')
-  const [formGender, setFormGender] = useState<PersonnelGender>('unknown')
-  const [formPhone, setFormPhone] = useState('')
-  const [formAddress, setFormAddress] = useState('')
-  const [formRemark, setFormRemark] = useState('')
-  /** 表单内组织：空字符串表示不关联 */
-  const [formOrganizationId, setFormOrganizationId] = useState('')
-
   const [messageApi, contextHolder] = message.useMessage()
 
   const loadList = useCallback(async () => {
@@ -96,18 +156,15 @@ function PersonnelManagementPage() {
     loadList()
   }, [loadList])
 
-  const orgOptionsSorted = useMemo(
-    () =>
-      [...viewableOrgs].sort((a, b) =>
-        a.display_name.localeCompare(b.display_name, 'zh-Hans-CN')
-      ),
+  const orgOptionsHierarchical = useMemo(
+    () => flattenOrganizationsForSelect(viewableOrgs),
     [viewableOrgs]
   )
 
-  const editOrgOptions = useMemo(() => {
+  const editOrgOptionsHierarchical = useMemo(() => {
     if (
       editTarget?.organizationId &&
-      !orgOptionsSorted.some((o) => o.id === editTarget.organizationId)
+      !orgOptionsHierarchical.some((item) => item.org.id === editTarget.organizationId)
     ) {
       const extra: Organization = {
         id: editTarget.organizationId,
@@ -120,10 +177,10 @@ function PersonnelManagementPage() {
         created_at: '',
         updated_at: '',
       }
-      return [extra, ...orgOptionsSorted]
+      return [{ org: extra, depth: 0 }, ...orgOptionsHierarchical]
     }
-    return orgOptionsSorted
-  }, [editTarget, orgOptionsSorted])
+    return orgOptionsHierarchical
+  }, [editTarget, orgOptionsHierarchical])
 
   const filtersActive =
     searchName.trim() !== '' ||
@@ -133,27 +190,27 @@ function PersonnelManagementPage() {
 
   const orgSearchOptions = useMemo(
     () => [
-      { label: '全部', value: ORG_FILTER_ALL },
-      { label: '未关联组织', value: ORG_FILTER_UNASSIGNED },
-      ...orgOptionsSorted.map((org) => ({ label: org.display_name, value: org.id })),
+      { label: '全部', value: ORG_FILTER_ALL, plainLabel: '全部' },
+      { label: '未关联组织', value: ORG_FILTER_UNASSIGNED, plainLabel: '未关联组织' },
+      ...orgOptionsHierarchical.map(toIndentedOrgOption),
     ],
-    [orgOptionsSorted]
+    [orgOptionsHierarchical]
   )
 
   const editOrgSelectOptions = useMemo(
     () => [
-      { label: '不关联组织', value: FORM_ORG_UNASSIGNED },
-      ...editOrgOptions.map((org) => ({ label: org.display_name, value: org.id })),
+      { label: '不关联组织', value: FORM_ORG_UNASSIGNED, plainLabel: '不关联组织' },
+      ...editOrgOptionsHierarchical.map(toIndentedOrgOption),
     ],
-    [editOrgOptions]
+    [editOrgOptionsHierarchical]
   )
 
   const formOrgSelectOptions = useMemo(
     () => [
-      { label: '不关联组织', value: FORM_ORG_UNASSIGNED },
-      ...orgOptionsSorted.map((org) => ({ label: org.display_name, value: org.id })),
+      { label: '不关联组织', value: FORM_ORG_UNASSIGNED, plainLabel: '不关联组织' },
+      ...orgOptionsHierarchical.map(toIndentedOrgOption),
     ],
-    [orgOptionsSorted]
+    [orgOptionsHierarchical]
   )
 
   const filtered = useMemo(() => {
@@ -177,41 +234,50 @@ function PersonnelManagementPage() {
     })
   }, [items, searchName, searchGender, searchPhone, searchOrganization])
 
-  const resetForm = () => {
-    setFormName('')
-    setFormGender('unknown')
-    setFormPhone('')
-    setFormAddress('')
-    setFormRemark('')
-    setFormOrganizationId('')
+  const resetAddForm = () => {
+    addForm.setFieldsValue({
+      fullName: '',
+      gender: 'unknown',
+      phone: '',
+      address: '',
+      remark: '',
+      organizationId: FORM_ORG_UNASSIGNED,
+    })
+    setFormError(null)
+  }
+
+  const resetEditForm = () => {
+    editForm.resetFields()
     setFormError(null)
   }
 
   const openEdit = (row: PersonnelRecord) => {
     setEditTarget(row)
-    setFormName(row.fullName)
-    setFormGender(row.gender)
-    setFormPhone(row.phone)
-    setFormAddress(row.address)
-    setFormRemark(row.remark ?? '')
-    setFormOrganizationId(row.organizationId ?? '')
+    editForm.setFieldsValue({
+      fullName: row.fullName,
+      gender: row.gender,
+      phone: row.phone,
+      address: row.address,
+      remark: row.remark ?? '',
+      organizationId: row.organizationId ?? FORM_ORG_UNASSIGNED,
+    })
     setFormError(null)
   }
 
-  const handleAddSubmit = async () => {
+  const handleAddSubmit = async (values: PersonnelFormValues) => {
     setFormError(null)
     setSubmitting(true)
     try {
       await createPersonnel({
-        fullName: formName,
-        gender: formGender,
-        phone: formPhone,
-        address: formAddress,
-        remark: formRemark,
-        organizationId: formOrganizationId.trim() || null,
+        fullName: values.fullName,
+        gender: values.gender,
+        phone: values.phone,
+        address: values.address,
+        remark: values.remark,
+        organizationId: values.organizationId.trim() || null,
       })
       setAddOpen(false)
-      resetForm()
+      resetAddForm()
       await loadList()
     } catch (err) {
       setFormError(err instanceof Error ? err.message : '保存失败')
@@ -220,21 +286,21 @@ function PersonnelManagementPage() {
     }
   }
 
-  const handleEditSubmit = async () => {
+  const handleEditSubmit = async (values: PersonnelFormValues) => {
     if (!editTarget) return
     setFormError(null)
     setSubmitting(true)
     try {
       const updated = await updatePersonnel(editTarget.id, {
-        fullName: formName,
-        gender: formGender,
-        phone: formPhone,
-        address: formAddress,
-        remark: formRemark.trim() || null,
-        organizationId: formOrganizationId.trim() ? formOrganizationId.trim() : null,
+        fullName: values.fullName,
+        gender: values.gender,
+        phone: values.phone,
+        address: values.address,
+        remark: values.remark.trim() || null,
+        organizationId: values.organizationId.trim() ? values.organizationId.trim() : null,
       })
       setEditTarget(null)
-      resetForm()
+      resetEditForm()
       await loadList()
       setDetail((d) => (d && d.id === updated.id ? updated : d))
     } catch (err) {
@@ -353,7 +419,7 @@ function PersonnelManagementPage() {
             <Button
               type="primary"
               onClick={() => {
-                resetForm()
+                resetAddForm()
                 setAddOpen(true)
               }}
             >
@@ -387,13 +453,17 @@ function PersonnelManagementPage() {
                       id="personnel-search-gender"
                       value={searchGender}
                       onChange={setSearchGender}
+                      style={{ width: '100%' }}
                       options={[
-                        { label: '全部', value: GENDER_FILTER_ALL },
+                        { label: '全部', value: GENDER_FILTER_ALL, plainLabel: '全部' },
                         ...(Object.keys(GENDER_LABEL) as PersonnelGender[]).map((g) => ({
                           label: GENDER_LABEL[g],
                           value: g,
+                          plainLabel: GENDER_LABEL[g],
                         })),
                       ]}
+                      optionFilterProp="plainLabel"
+                      optionLabelProp="plainLabel"
                     />
                   </Space>
                 </Col>
@@ -408,7 +478,9 @@ function PersonnelManagementPage() {
                       options={orgSearchOptions}
                       loading={orgsLoading}
                       showSearch
-                      optionFilterProp="label"
+                      optionFilterProp="plainLabel"
+                      optionLabelProp="plainLabel"
+                      style={{ width: '100%' }}
                     />
                   </Space>
                 </Col>
@@ -495,69 +567,76 @@ function PersonnelManagementPage() {
         confirmLoading={submitting}
         onCancel={() => {
           setAddOpen(false)
-          resetForm()
+          resetAddForm()
         }}
         onOk={() => {
-          void handleAddSubmit()
+          void addForm.submit()
         }}
       >
         <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
           带 * 为必填项；新建默认为启用
         </Typography.Paragraph>
-        <Form layout="vertical">
-          <Form.Item label="姓名 *" required>
-            <Input
-              id="pf-name"
-              value={formName}
-              onChange={(e) => setFormName(e.target.value)}
-              autoComplete="name"
-            />
+        <Form<PersonnelFormValues> form={addForm} layout="vertical" onFinish={handleAddSubmit}>
+          <Form.Item
+            name="fullName"
+            label="姓名 *"
+            rules={[
+              { required: true, whitespace: true, message: '请输入姓名' },
+              { max: 30, message: '姓名不能超过 30 个字符' },
+            ]}
+          >
+            <Input id="pf-name" autoComplete="name" />
           </Form.Item>
-          <Form.Item label="性别">
+          <Form.Item name="gender" label="性别" initialValue="unknown">
             <Select
               id="pf-gender"
-              value={formGender}
-              onChange={(value) => setFormGender(value as PersonnelGender)}
               options={(Object.keys(GENDER_LABEL) as PersonnelGender[]).map((g) => ({
                 label: GENDER_LABEL[g],
                 value: g,
               }))}
             />
           </Form.Item>
-          <Form.Item label="电话">
+          <Form.Item
+            name="phone"
+            label="电话"
+            rules={[
+              {
+                validator: (_, value: string) => {
+                  const err = validateOptionalMainlandMobile(value ?? '')
+                  return err ? Promise.reject(new Error(err)) : Promise.resolve()
+                },
+              },
+            ]}
+          >
             <Input
               id="pf-phone"
               type="tel"
               placeholder="11 位手机号，可含 +86 或空格；可留空"
-              value={formPhone}
-              onChange={(e) => setFormPhone(e.target.value)}
               autoComplete="tel"
             />
           </Form.Item>
-          <Form.Item label="所属组织">
+          <Form.Item
+            name="organizationId"
+            label="所属组织"
+            initialValue={FORM_ORG_UNASSIGNED}
+          >
             <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
               与组织管理保持同一数据源
             </Typography.Text>
             <Select
               id="pf-org"
-              value={formOrganizationId}
-              onChange={setFormOrganizationId}
               options={formOrgSelectOptions}
               loading={orgsLoading}
               showSearch
-              optionFilterProp="label"
+              optionFilterProp="plainLabel"
+              optionLabelProp="plainLabel"
             />
           </Form.Item>
-          <Form.Item label="住址">
-            <Input
-              id="pf-address"
-              value={formAddress}
-              onChange={(e) => setFormAddress(e.target.value)}
-              autoComplete="street-address"
-            />
+          <Form.Item name="address" label="住址">
+            <Input id="pf-address" autoComplete="street-address" />
           </Form.Item>
-          <Form.Item label="备注">
-            <Input id="pf-remark" value={formRemark} onChange={(e) => setFormRemark(e.target.value)} />
+          <Form.Item name="remark" label="备注" rules={[{ max: 200, message: '备注不能超过 200 个字符' }]}>
+            <Input id="pf-remark" />
           </Form.Item>
           {formError && <Typography.Text type="danger">{formError}</Typography.Text>}
         </Form>
@@ -571,69 +650,72 @@ function PersonnelManagementPage() {
         confirmLoading={submitting}
         onCancel={() => {
           setEditTarget(null)
-          resetForm()
+          resetEditForm()
         }}
         onOk={() => {
-          void handleEditSubmit()
+          void editForm.submit()
         }}
       >
         <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
           修改后保存；启用状态请使用列表中的禁用/启用
         </Typography.Paragraph>
-        <Form layout="vertical">
-          <Form.Item label="姓名 *" required>
-            <Input
-              id="pf-edit-name"
-              value={formName}
-              onChange={(e) => setFormName(e.target.value)}
-              autoComplete="name"
-            />
+        <Form<PersonnelFormValues> form={editForm} layout="vertical" onFinish={handleEditSubmit}>
+          <Form.Item
+            name="fullName"
+            label="姓名 *"
+            rules={[
+              { required: true, whitespace: true, message: '请输入姓名' },
+              { max: 30, message: '姓名不能超过 30 个字符' },
+            ]}
+          >
+            <Input id="pf-edit-name" autoComplete="name" />
           </Form.Item>
-          <Form.Item label="性别">
+          <Form.Item name="gender" label="性别">
             <Select
               id="pf-edit-gender"
-              value={formGender}
-              onChange={(value) => setFormGender(value as PersonnelGender)}
               options={(Object.keys(GENDER_LABEL) as PersonnelGender[]).map((g) => ({
                 label: GENDER_LABEL[g],
                 value: g,
               }))}
             />
           </Form.Item>
-          <Form.Item label="电话">
+          <Form.Item
+            name="phone"
+            label="电话"
+            rules={[
+              {
+                validator: (_, value: string) => {
+                  const err = validateOptionalMainlandMobile(value ?? '')
+                  return err ? Promise.reject(new Error(err)) : Promise.resolve()
+                },
+              },
+            ]}
+          >
             <Input
               id="pf-edit-phone"
               type="tel"
               placeholder="11 位手机号，可含 +86 或空格；可留空"
-              value={formPhone}
-              onChange={(e) => setFormPhone(e.target.value)}
               autoComplete="tel"
             />
           </Form.Item>
-          <Form.Item label="所属组织">
+          <Form.Item name="organizationId" label="所属组织">
             <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
               与组织管理保持同一数据源
             </Typography.Text>
             <Select
               id="pf-edit-org"
-              value={formOrganizationId}
-              onChange={setFormOrganizationId}
               options={editOrgSelectOptions}
               loading={orgsLoading}
               showSearch
-              optionFilterProp="label"
+              optionFilterProp="plainLabel"
+              optionLabelProp="plainLabel"
             />
           </Form.Item>
-          <Form.Item label="住址">
-            <Input
-              id="pf-edit-address"
-              value={formAddress}
-              onChange={(e) => setFormAddress(e.target.value)}
-              autoComplete="street-address"
-            />
+          <Form.Item name="address" label="住址">
+            <Input id="pf-edit-address" autoComplete="street-address" />
           </Form.Item>
-          <Form.Item label="备注">
-            <Input id="pf-edit-remark" value={formRemark} onChange={(e) => setFormRemark(e.target.value)} />
+          <Form.Item name="remark" label="备注" rules={[{ max: 200, message: '备注不能超过 200 个字符' }]}>
+            <Input id="pf-edit-remark" />
           </Form.Item>
           {formError && <Typography.Text type="danger">{formError}</Typography.Text>}
         </Form>

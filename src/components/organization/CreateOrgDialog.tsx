@@ -2,7 +2,7 @@
  * CreateOrgDialog - 创建组织对话框
  * @description 展示名、描述由用户填写；技术标识由系统生成（见 generateOrganizationSlug）
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Form, Input, Modal } from 'antd'
 import { generateOrganizationSlug } from '@/lib/organizationSlug'
 import type { Organization, CreateOrganizationInput } from '@/lib/supabase/organizationTypes'
@@ -17,6 +17,10 @@ interface CreateOrgDialogProps {
   referenceOrg?: Organization | null
   intent?: CreateOrgIntent
   onSubmit: (input: CreateOrganizationInput) => Promise<void>
+}
+interface CreateOrgFormValues {
+  displayName: string
+  description?: string
 }
 
 function createDescription(
@@ -46,14 +50,16 @@ export function CreateOrgDialog({
   intent = 'child',
   onSubmit,
 }: CreateOrgDialogProps) {
-  const [form] = Form.useForm()
-  const [displayName, setDisplayName] = useState('')
-  const [description, setDescription] = useState('')
+  const [form] = Form.useForm<CreateOrgFormValues>()
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleSubmit = async () => {
-    if (!displayName.trim()) return
+  useEffect(() => {
+    if (!open) {
+      form.resetFields()
+    }
+  }, [open, form])
 
+  const handleSubmit = async (values: CreateOrgFormValues) => {
     setIsSubmitting(true)
     try {
       const parentId =
@@ -61,12 +67,10 @@ export function CreateOrgDialog({
 
       await onSubmit({
         name: generateOrganizationSlug(),
-        display_name: displayName.trim(),
+        display_name: values.displayName.trim(),
         parent_id: parentId,
-        description: description.trim() || null,
+        description: values.description?.trim() || null,
       })
-      setDisplayName('')
-      setDescription('')
       form.resetFields()
       onOpenChange(false)
     } catch (error) {
@@ -80,38 +84,38 @@ export function CreateOrgDialog({
     <Modal
       title={createTitle(intent)}
       open={open}
-      onCancel={() => onOpenChange(false)}
+      onCancel={() => {
+        onOpenChange(false)
+      }}
       onOk={() => {
-        void handleSubmit()
+        void form.submit()
       }}
       okText={isSubmitting ? '创建中...' : '创建'}
       cancelText="取消"
       confirmLoading={isSubmitting}
-      okButtonProps={{ disabled: !displayName.trim() }}
       destroyOnHidden
     >
       <p style={{ marginBottom: 16, color: 'rgba(0, 0, 0, 0.45)' }}>
         {createDescription(intent, parentOrg, referenceOrg)}
       </p>
-      <Form form={form} layout="vertical" onFinish={() => void handleSubmit()}>
-        <Form.Item label="显示名称 *" required>
-          <Input
-            id="displayName"
-            placeholder="例如：北方大区"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            required
-          />
+      <Form<CreateOrgFormValues> form={form} layout="vertical" onFinish={handleSubmit}>
+        <Form.Item
+          name="displayName"
+          label="显示名称 *"
+          rules={[
+            { required: true, whitespace: true, message: '请输入显示名称' },
+            { max: 50, message: '显示名称不能超过 50 个字符' },
+          ]}
+        >
+          <Input id="displayName" placeholder="例如：北方大区" />
         </Form.Item>
 
-        <Form.Item label="描述（可选）">
-          <Input.TextArea
-            id="description"
-            placeholder="组织简介…"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={3}
-          />
+        <Form.Item
+          name="description"
+          label="描述（可选）"
+          rules={[{ max: 200, message: '描述不能超过 200 个字符' }]}
+        >
+          <Input.TextArea id="description" placeholder="组织简介…" rows={3} />
         </Form.Item>
       </Form>
     </Modal>
