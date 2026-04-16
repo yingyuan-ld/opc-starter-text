@@ -4,16 +4,7 @@
  */
 import { useState, useEffect } from 'react'
 import { FileUser } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Badge } from '@/components/ui/badge'
+import { Avatar, Button, Empty, List, Modal, Space, Tag, Typography, message } from 'antd'
 import type { PersonnelRecord } from '@/types/personnel'
 
 interface AddMemberDialogProps {
@@ -31,6 +22,7 @@ export function AddMemberDialog({
   listAssignablePersonnel,
   onAssignPersonnel,
 }: AddMemberDialogProps) {
+  const [messageApi, contextHolder] = message.useMessage()
   const [personnelOptions, setPersonnelOptions] = useState<PersonnelRecord[]>([])
   const [selectedPersonnel, setSelectedPersonnel] = useState<PersonnelRecord | null>(null)
   const [personnelLoading, setPersonnelLoading] = useState(false)
@@ -70,74 +62,86 @@ export function AddMemberDialog({
       onOpenChange(false)
     } catch (error) {
       console.error('Failed to assign personnel:', error)
-      alert(error instanceof Error ? error.message : '关联失败')
+      messageApi.error(error instanceof Error ? error.message : '关联失败')
     } finally {
       setIsSubmitting(false)
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>添加人员到 {organizationName}</DialogTitle>
-          <DialogDescription>
-            从人员管理中选择档案关联到本组织；人员即业务参与人，与列表「所属组织」一致。
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 py-2">
-          {personnelLoading && <p className="text-sm text-muted-foreground">加载人员档案…</p>}
+    <>
+      {contextHolder}
+      <Modal
+        title={`添加人员到 ${organizationName}`}
+        open={open}
+        onCancel={() => onOpenChange(false)}
+        onOk={() => {
+          void handleAssign()
+        }}
+        okText={isSubmitting ? '关联中…' : '关联到本组织'}
+        cancelText="取消"
+        confirmLoading={isSubmitting}
+        okButtonProps={{ disabled: !selectedPersonnel || isSubmitting }}
+        destroyOnHidden
+      >
+        <Typography.Paragraph type="secondary">
+          从人员管理中选择档案关联到本组织；人员即业务参与人，与列表「所属组织」一致。
+        </Typography.Paragraph>
+        <div style={{ minHeight: 220 }}>
+          {personnelLoading && <Typography.Text type="secondary">加载人员档案…</Typography.Text>}
           {!personnelLoading && personnelOptions.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              暂无可关联的档案（请在人员管理中新建，或已全部在本组织）。
-            </p>
+            <Empty description="暂无可关联的档案（请在人员管理中新建，或已全部在本组织）。" />
           )}
           {!personnelLoading && personnelOptions.length > 0 && (
-            <div className="space-y-2 max-h-[320px] overflow-y-auto border rounded-lg p-2">
-              {personnelOptions.map((row) => (
-                <button
+            <List
+              size="small"
+              style={{ maxHeight: 320, overflowY: 'auto' }}
+              bordered
+              dataSource={personnelOptions}
+              renderItem={(row) => (
+                <List.Item
                   key={row.id}
-                  type="button"
+                  style={{
+                    cursor: 'pointer',
+                    backgroundColor: selectedPersonnel?.id === row.id ? '#e6f4ff' : undefined,
+                  }}
                   onClick={() => setSelectedPersonnel(row)}
-                  className={`w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-colors ${
-                    selectedPersonnel?.id === row.id
-                      ? 'border-primary bg-accent'
-                      : 'border-border hover:bg-accent/50'
-                  }`}
                 >
-                  <FileUser className="h-8 w-8 shrink-0 text-muted-foreground" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{row.fullName}</p>
-                    <p className="text-sm text-muted-foreground truncate">{row.phone || '—'}</p>
-                  </div>
-                  {row.organizationId && row.organizationDisplayName && (
-                    <Badge variant="secondary" className="text-xs shrink-0">
-                      原：{row.organizationDisplayName}
-                    </Badge>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {selectedPersonnel && (
-            <div className="rounded-lg border bg-muted/30 p-3 text-sm">
-              <p className="font-medium">将「{selectedPersonnel.fullName}」关联到本组织</p>
-              <p className="text-muted-foreground mt-1">人员管理中的「所属组织」将同步更新。</p>
-            </div>
+                  <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                    <Space>
+                      <Avatar icon={<FileUser size={14} />} />
+                      <div>
+                        <Typography.Text strong>{row.fullName}</Typography.Text>
+                        <br />
+                        <Typography.Text type="secondary">{row.phone || '—'}</Typography.Text>
+                      </div>
+                    </Space>
+                    {row.organizationId && row.organizationDisplayName && (
+                      <Tag>原：{row.organizationDisplayName}</Tag>
+                    )}
+                  </Space>
+                </List.Item>
+              )}
+            />
           )}
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-            取消
-          </Button>
-          <Button type="button" onClick={() => void handleAssign()} disabled={!selectedPersonnel || isSubmitting}>
-            {isSubmitting ? '关联中…' : '关联到本组织'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        {selectedPersonnel && (
+          <div
+            style={{
+              marginTop: 12,
+              padding: 12,
+              borderRadius: 8,
+              border: '1px solid #d9d9d9',
+              background: '#fafafa',
+            }}
+          >
+            <Typography.Text strong>将「{selectedPersonnel.fullName}」关联到本组织</Typography.Text>
+            <br />
+            <Typography.Text type="secondary">人员管理中的「所属组织」将同步更新。</Typography.Text>
+          </div>
+        )}
+      </Modal>
+    </>
   )
 }

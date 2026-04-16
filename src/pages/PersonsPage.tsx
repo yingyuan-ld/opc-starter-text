@@ -3,6 +3,7 @@
  * @description 展示组织树、参与人员（人员管理档案）；组织结构操作在树节点行内（管理员）
  */
 import { useEffect, useState, useRef, useCallback } from 'react'
+import { Alert, Card, Empty, Modal, Spin, Typography, message } from 'antd'
 import { OrgTree } from '@/components/organization/OrgTree'
 import { TeamMembersList } from '@/components/organization/TeamMembersList'
 import { CreateOrgDialog, type CreateOrgIntent } from '@/components/organization/CreateOrgDialog'
@@ -21,6 +22,7 @@ import {
 import type { PersonnelRecord } from '@/types/personnel'
 
 function PersonsPage() {
+  const [messageApi, contextHolder] = message.useMessage()
   const { user } = useAuthStore()
   const userId = user?.id || ''
   const initializedRef = useRef(false)
@@ -94,18 +96,23 @@ function PersonsPage() {
     setCreateDialogOpen(true)
   }
 
-  const handleDeleteOrg = async () => {
+  const handleDeleteOrg = () => {
     if (!selectedOrg) return
 
-    if (!confirm(`确定要删除组织 "${selectedOrg.display_name}" 吗？此操作不可撤销。`)) {
-      return
-    }
-
-    try {
-      await deleteOrganization(selectedOrg.id)
-    } catch (err) {
-      alert(err instanceof Error ? err.message : '删除失败')
-    }
+    Modal.confirm({
+      title: '确认删除组织',
+      content: `确定要删除组织 "${selectedOrg.display_name}" 吗？此操作不可撤销。`,
+      okText: '删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await deleteOrganization(selectedOrg.id)
+        } catch (err) {
+          messageApi.error(err instanceof Error ? err.message : '删除失败')
+        }
+      },
+    })
   }
 
   const handleAddMember = () => {
@@ -118,14 +125,21 @@ function PersonsPage() {
     await refreshPersonnelInOrg()
   }
 
-  const handleRemovePersonnel = async (record: PersonnelRecord) => {
-    if (!confirm(`确定将「${record.fullName}」从本组织移除？`)) return
-    try {
-      await updatePersonnel(record.id, { organizationId: null })
-      await refreshPersonnelInOrg()
-    } catch (err) {
-      alert(err instanceof Error ? err.message : '操作失败')
-    }
+  const handleRemovePersonnel = (record: PersonnelRecord) => {
+    Modal.confirm({
+      title: '确认移除人员',
+      content: `确定将「${record.fullName}」从本组织移除？`,
+      okText: '移除',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await updatePersonnel(record.id, { organizationId: null })
+          await refreshPersonnelInOrg()
+        } catch (err) {
+          messageApi.error(err instanceof Error ? err.message : '操作失败')
+        }
+      },
+    })
   }
 
   const currentUserRole = userOrgInfo?.role || 'member'
@@ -133,32 +147,29 @@ function PersonsPage() {
 
   if (!userId) {
     return (
-      <div className="max-w-7xl mx-auto p-4">
-        <p className="text-muted-foreground">请先登录</p>
+      <div style={{ maxWidth: 1120, margin: '0 auto', padding: 16 }}>
+        {contextHolder}
+        <Typography.Text type="secondary">请先登录</Typography.Text>
       </div>
     )
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-4 h-[calc(100vh-4rem)]">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-3xl font-bold">组织架构与人员管理</h1>
-          <p className="text-sm text-muted-foreground mt-1">管理团队组织结构和成员信息</p>
-        </div>
+    <div style={{ maxWidth: 1120, margin: '0 auto', padding: 16, height: 'calc(100vh - 4rem)' }}>
+      {contextHolder}
+      <div style={{ marginBottom: 16 }}>
+        <Typography.Title level={2} style={{ marginBottom: 4 }}>
+          组织架构与人员管理
+        </Typography.Title>
+        <Typography.Text type="secondary">管理团队组织结构和成员信息</Typography.Text>
       </div>
 
-      {error && (
-        <div className="bg-destructive/10 border border-destructive text-destructive px-4 py-3 rounded-md mb-4">
-          <p className="text-sm">{error}</p>
-        </div>
-      )}
+      {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(300px,420px)_1fr] gap-4 h-[calc(100%-5rem)]">
-        <div className="border rounded-lg p-4 overflow-y-auto bg-card">
-          <h2 className="text-lg font-semibold mb-3">组织树</h2>
+        <Card title="组织树" styles={{ body: { height: '100%', overflowY: 'auto' } }}>
           {isLoading && !tree.length ? (
-            <p className="text-sm text-muted-foreground">加载中...</p>
+            <Spin tip="加载中..." />
           ) : (
             <OrgTree
               tree={tree}
@@ -172,11 +183,11 @@ function PersonsPage() {
               onDeleteNode={isAdmin ? handleDeleteOrg : undefined}
             />
           )}
-        </div>
+        </Card>
 
-        <div className="border rounded-lg p-4 overflow-hidden bg-card flex flex-col min-h-0">
+        <Card styles={{ body: { height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' } }}>
           {selectedOrg ? (
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div style={{ minHeight: 0, flex: 1, overflowY: 'auto' }}>
               <TeamMembersList
                 personnelMembers={personnelInOrg}
                 organizationName={selectedOrg.display_name}
@@ -186,11 +197,11 @@ function PersonsPage() {
               />
             </div>
           ) : (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              <p className="text-sm">请从左侧选择一个组织查看成员</p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+              <Empty description="请从左侧选择一个组织查看成员" />
             </div>
           )}
-        </div>
+        </Card>
       </div>
 
       <CreateOrgDialog

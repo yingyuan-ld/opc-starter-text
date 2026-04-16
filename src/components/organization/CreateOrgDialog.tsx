@@ -3,18 +3,7 @@
  * @description 展示名、描述由用户填写；技术标识由系统生成（见 generateOrganizationSlug）
  */
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+import { Form, Input, Modal } from 'antd'
 import { generateOrganizationSlug } from '@/lib/organizationSlug'
 import type { Organization, CreateOrganizationInput } from '@/lib/supabase/organizationTypes'
 
@@ -57,12 +46,12 @@ export function CreateOrgDialog({
   intent = 'child',
   onSubmit,
 }: CreateOrgDialogProps) {
+  const [form] = Form.useForm()
   const [displayName, setDisplayName] = useState('')
   const [description, setDescription] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async () => {
     if (!displayName.trim()) return
 
     setIsSubmitting(true)
@@ -78,6 +67,7 @@ export function CreateOrgDialog({
       })
       setDisplayName('')
       setDescription('')
+      form.resetFields()
       onOpenChange(false)
     } catch (error) {
       console.error('Failed to create organization:', error)
@@ -87,55 +77,43 @@ export function CreateOrgDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>{createTitle(intent)}</DialogTitle>
-            <DialogDescription>
-              {createDescription(intent, parentOrg, referenceOrg)}
-            </DialogDescription>
-          </DialogHeader>
+    <Modal
+      title={createTitle(intent)}
+      open={open}
+      onCancel={() => onOpenChange(false)}
+      onOk={() => {
+        void handleSubmit()
+      }}
+      okText={isSubmitting ? '创建中...' : '创建'}
+      cancelText="取消"
+      confirmLoading={isSubmitting}
+      okButtonProps={{ disabled: !displayName.trim() }}
+      destroyOnHidden
+    >
+      <p style={{ marginBottom: 16, color: 'rgba(0, 0, 0, 0.45)' }}>
+        {createDescription(intent, parentOrg, referenceOrg)}
+      </p>
+      <Form form={form} layout="vertical" onFinish={() => void handleSubmit()}>
+        <Form.Item label="显示名称 *" required>
+          <Input
+            id="displayName"
+            placeholder="例如：北方大区"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            required
+          />
+        </Form.Item>
 
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="displayName">显示名称 *</Label>
-              <Input
-                id="displayName"
-                placeholder="例如：北方大区"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description">描述（可选）</Label>
-              <Textarea
-                id="description"
-                placeholder="组织简介…"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSubmitting}
-            >
-              取消
-            </Button>
-            <Button type="submit" disabled={isSubmitting || !displayName.trim()}>
-              {isSubmitting ? '创建中...' : '创建'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        <Form.Item label="描述（可选）">
+          <Input.TextArea
+            id="description"
+            placeholder="组织简介…"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+          />
+        </Form.Item>
+      </Form>
+    </Modal>
   )
 }

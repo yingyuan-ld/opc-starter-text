@@ -79,7 +79,7 @@ describe('人员管理 ↔ 组织数据联通', () => {
       expect(orgServiceMocks.getViewableOrganizations).toHaveBeenCalledWith('user-qa')
     })
 
-    await user.click(screen.getByRole('button', { name: '全部' }))
+    await user.click(screen.getByTestId('personnel-search-org-select'))
 
     await waitFor(() => {
       expect(screen.getByText('QA联通组织A')).toBeInTheDocument()
